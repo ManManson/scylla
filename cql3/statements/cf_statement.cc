@@ -48,37 +48,37 @@ namespace statements {
 
 namespace raw {
 
-cf_statement::cf_statement(::shared_ptr<cf_name> cf_name)
+cf_statement::cf_statement(cf_name cf_name)
     : _cf_name(std::move(cf_name))
 {
 }
 
 void cf_statement::prepare_keyspace(const service::client_state& state)
 {
-    if (!_cf_name->has_keyspace()) {
+    if (!_cf_name.has_keyspace()) {
         // XXX: We explicitely only want to call state.getKeyspace() in this case, as we don't want to throw
         // if not logged in any keyspace but a keyspace is explicitely set on the statement. So don't move
         // the call outside the 'if' or replace the method by 'prepareKeyspace(state.getKeyspace())'
-        _cf_name->set_keyspace(state.get_keyspace(), true);
+        _cf_name.set_keyspace(state.get_keyspace(), true);
     }
 }
 
 void cf_statement::prepare_keyspace(std::string_view keyspace)
 {
-    if (!_cf_name->has_keyspace()) {
-        _cf_name->set_keyspace(keyspace, true);
+    if (!_cf_name.has_keyspace()) {
+        _cf_name.set_keyspace(keyspace, true);
     }
 }
 
 const sstring& cf_statement::keyspace() const
 {
-    assert(_cf_name->has_keyspace()); // "The statement hasn't be prepared correctly";
-    return _cf_name->get_keyspace();
+    assert(_cf_name.has_keyspace()); // "The statement hasn't be prepared correctly";
+    return _cf_name.get_keyspace();
 }
 
 const sstring& cf_statement::column_family() const
 {
-    return _cf_name->get_column_family();
+    return _cf_name.get_column_family();
 }
 
 }

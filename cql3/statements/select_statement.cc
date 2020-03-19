@@ -1231,7 +1231,7 @@ indexed_table_select_statement::find_index_clustering_rows(service::storage_prox
 
 namespace raw {
 
-select_statement::select_statement(::shared_ptr<cf_name> cf_name,
+select_statement::select_statement(cf_name cf_name,
                                    lw_shared_ptr<const parameters> parameters,
                                    std::vector<::shared_ptr<selection::raw_selector>> select_clause,
                                    std::vector<::shared_ptr<relation>> where_clause,

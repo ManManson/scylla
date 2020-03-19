@@ -53,13 +53,13 @@ const sstring& index_name::get_idx() const
     return _idx_name;
 }
 
-::shared_ptr<cf_name> index_name::get_cf_name() const
+cf_name index_name::get_cf_name() const
 {
-    auto cf = ::make_shared<cf_name>();
+    cf_name res;
     if (has_keyspace()) {
-        cf->set_keyspace(get_keyspace(), true);
+        res.set_keyspace(get_keyspace(), true);
     }
-    return cf;
+    return res;
 }
 
 sstring index_name::to_string() const

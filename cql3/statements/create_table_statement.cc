@@ -61,12 +61,12 @@ namespace cql3 {
 
 namespace statements {
 
-create_table_statement::create_table_statement(::shared_ptr<cf_name> name,
+create_table_statement::create_table_statement(cf_name name,
                                                ::shared_ptr<cf_prop_defs> properties,
                                                bool if_not_exists,
                                                column_set_type static_columns,
                                                const std::optional<utils::UUID>& id)
-    : schema_altering_statement{name}
+    : schema_altering_statement{std::move(name)}
     , _use_compact_storage(false)
     , _static_columns{static_columns}
     , _properties{properties}
@@ -179,14 +179,14 @@ future<> create_table_statement::grant_permissions_to_creator(const service::cli
     });
 }
 
-create_table_statement::raw_statement::raw_statement(::shared_ptr<cf_name> name, bool if_not_exists)
+create_table_statement::raw_statement::raw_statement(cf_name name, bool if_not_exists)
     : cf_statement{std::move(name)}
     , _if_not_exists{if_not_exists}
 { }
 
 std::unique_ptr<prepared_statement> create_table_statement::raw_statement::prepare(database& db, cql_stats& stats) {
     // Column family name
-    const sstring& cf_name = _cf_name->get_column_family();
+    const sstring& cf_name = _cf_name.get_column_family();
     std::regex name_regex("\\w+");
     if (!std::regex_match(std::string(cf_name), name_regex)) {
         throw exceptions::invalid_request_exception(format("\"{}\" is not a valid table name (must be alphanumeric character only: [0-9A-Za-z]+)", cf_name.c_str()));

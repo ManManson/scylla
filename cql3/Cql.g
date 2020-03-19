@@ -765,7 +765,7 @@ createKeyspaceStatement returns [shared_ptr<cql3::statements::create_keyspace_st
 createTableStatement returns [shared_ptr<cql3::statements::create_table_statement::raw_statement> expr]
     @init { bool if_not_exists = false; }
     : K_CREATE K_COLUMNFAMILY (K_IF K_NOT K_EXISTS { if_not_exists = true; } )?
-      cf=columnFamilyName { $expr = make_shared<cql3::statements::create_table_statement::raw_statement>(cf, if_not_exists); }
+      cf=columnFamilyName { $expr = make_shared<cql3::statements::create_table_statement::raw_statement>(std::move(cf), if_not_exists); }
       cfamDefinition[expr]
     ;
 
@@ -830,10 +830,10 @@ createIndexStatement returns [::shared_ptr<create_index_statement> expr]
         std::vector<::shared_ptr<index_target::raw>> targets;
     }
     : K_CREATE (K_CUSTOM { props->is_custom = true; })? K_INDEX (K_IF K_NOT K_EXISTS { if_not_exists = true; } )?
-        (idxName[name])? K_ON cf=columnFamilyName '(' (target1=indexIdent { targets.emplace_back(target1); } (',' target2=indexIdent { targets.emplace_back(target2); } )*)? ')'
+        (idxName[*name])? K_ON cf=columnFamilyName '(' (target1=indexIdent { targets.emplace_back(target1); } (',' target2=indexIdent { targets.emplace_back(target2); } )*)? ')'
         (K_USING cls=STRING_LITERAL { props->custom_class = sstring{$cls.text}; })?
         (K_WITH properties[props])?
-      { $expr = ::make_shared<create_index_statement>(cf, name, targets, props, if_not_exists); }
+      { $expr = ::make_shared<create_index_statement>(std::move(cf), name, targets, props, if_not_exists); }
     ;
 
 indexIdent returns [::shared_ptr<index_target::raw> id]
@@ -1120,7 +1120,7 @@ dataResource returns [uninitialized<auth::resource> res]
     : K_ALL K_KEYSPACES { $res = auth::resource(auth::resource_kind::data); }
     | K_KEYSPACE ks = keyspaceName { $res = auth::make_data_resource($ks.id); }
     | ( K_COLUMNFAMILY )? cf = columnFamilyName
-      { $res = auth::make_data_resource($cf.name->get_keyspace(), $cf.name->get_column_family()); }
+      { $res = auth::make_data_resource($cf.name.get_keyspace(), $cf.name.get_column_family()); }
     ;
 
 roleResource returns [uninitialized<auth::resource> res]
@@ -1257,17 +1257,15 @@ ident returns [shared_ptr<cql3::column_identifier> id]
 
 // Keyspace & Column family names
 keyspaceName returns [sstring id]
-    @init { auto name = make_shared<cql3::cf_name>(); }
-    : ksName[name] { $id = name->get_keyspace(); }
+    @init { cql3::cf_name name; }
+    : ksName[name] { $id = name.get_keyspace(); }
     ;
 
-indexName returns [::shared_ptr<cql3::index_name> name]
-    @init { $name = ::make_shared<cql3::index_name>(); }
+indexName returns [cql3::index_name name]
     : (ksName[name] '.')? idxName[name]
     ;
 
-columnFamilyName returns [::shared_ptr<cql3::cf_name> name]
-    @init { $name = ::make_shared<cql3::cf_name>(); }
+columnFamilyName returns [cql3::cf_name name]
     : (ksName[name] '.')? cfName[name]
     ;
 
@@ -1283,24 +1281,24 @@ userOrRoleName returns [uninitialized<cql3::role_name> name]
     | QMARK {add_recognition_error("Bind variables cannot be used for role names");}
     ;
 
-ksName[::shared_ptr<cql3::keyspace_element_name> name]
-    : t=IDENT              { $name->set_keyspace($t.text, false);}
-    | t=QUOTED_NAME        { $name->set_keyspace($t.text, true);}
-    | k=unreserved_keyword { $name->set_keyspace(k, false);}
+ksName[cql3::keyspace_element_name& name]
+    : t=IDENT              { $name.set_keyspace($t.text, false);}
+    | t=QUOTED_NAME        { $name.set_keyspace($t.text, true);}
+    | k=unreserved_keyword { $name.set_keyspace(k, false);}
     | QMARK {add_recognition_error("Bind variables cannot be used for keyspace names");}
     ;
 
-cfName[::shared_ptr<cql3::cf_name> name]
-    : t=IDENT              { $name->set_column_family($t.text, false); }
-    | t=QUOTED_NAME        { $name->set_column_family($t.text, true); }
-    | k=unreserved_keyword { $name->set_column_family(k, false); }
+cfName[cql3::cf_name& name]
+    : t=IDENT              { $name.set_column_family($t.text, false); }
+    | t=QUOTED_NAME        { $name.set_column_family($t.text, true); }
+    | k=unreserved_keyword { $name.set_column_family(k, false); }
     | QMARK {add_recognition_error("Bind variables cannot be used for table names");}
     ;
 
-idxName[::shared_ptr<cql3::index_name> name]
-    : t=IDENT              { $name->set_index($t.text, false); }
-    | t=QUOTED_NAME        { $name->set_index($t.text, true);}
-    | k=unreserved_keyword { $name->set_index(k, false); }
+idxName[cql3::index_name& name]
+    : t=IDENT              { $name.set_index($t.text, false); }
+    | t=QUOTED_NAME        { $name.set_index($t.text, true);}
+    | k=unreserved_keyword { $name.set_index(k, false); }
     | QMARK {add_recognition_error("Bind variables cannot be used for index names");}
     ;
 

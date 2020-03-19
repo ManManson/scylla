@@ -58,12 +58,12 @@ namespace cql3 {
 
 namespace statements {
 
-create_index_statement::create_index_statement(::shared_ptr<cf_name> name,
+create_index_statement::create_index_statement(cf_name name,
                                                ::shared_ptr<index_name> index_name,
                                                std::vector<::shared_ptr<index_target::raw>> raw_targets,
                                                ::shared_ptr<index_prop_defs> properties,
                                                bool if_not_exists)
-    : schema_altering_statement(name)
+    : schema_altering_statement(std::move(name))
     , _index_name(index_name->get_idx())
     , _raw_targets(raw_targets)
     , _properties(properties)
