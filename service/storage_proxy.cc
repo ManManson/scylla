@@ -196,9 +196,8 @@ public:
         auto m = _mutations[ep];
         if (m) {
             return hm.store_hint(ep, _schema, std::move(m), tr_state);
-        } else {
-            return false;
         }
+        return false;
     }
     virtual future<> apply_locally(storage_proxy& sp, storage_proxy::clock_type::time_point timeout,
             tracing::trace_state_ptr tr_state) override {
@@ -545,10 +544,9 @@ public:
         // resolution.
         if (std::chrono::duration_cast<storage_proxy::clock_type::duration>(ret) < budget) {
             return ret;
-        } else {
-            // budget is small (< ret) so can be converted to microseconds
-            return budget;
         }
+        // budget is small (< ret) so can be converted to microseconds
+        return budget;
     }
     // Calculates how much to delay completing the request. The delay adds to the request's inherent latency.
     template<typename Func>
@@ -597,7 +595,7 @@ public:
         return _mutation_holder->size();
     }
     storage_proxy::response_id_type id() const {
-      return _id;
+        return _id;
     }
     bool read_repair_write() {
         return !_mutation_holder->is_shared();
@@ -846,13 +844,12 @@ paxos_response_handler::begin_and_repair_paxos(client_state& cs, unsigned& conte
                                     // we're still doing preparation for the paxos rounds, so we want to use the CAS (see cASSANDRA-8672)
                                     return make_exception_future<std::optional<ballot_and_data>>(std::move(e));
                                 });
-                            } else {
-                                paxos::paxos_state::logger.debug("CAS[{}] Some replicas have already promised a higher ballot than ours; aborting", _id);
-                                tracing::trace(tr_state, "Some replicas have already promised a higher ballot than ours; aborting");
-                                // sleep a random amount to give the other proposer a chance to finish
-                                contentions++;
-                                return sleep_and_restart();
                             }
+                            paxos::paxos_state::logger.debug("CAS[{}] Some replicas have already promised a higher ballot than ours; aborting", _id);
+                            tracing::trace(tr_state, "Some replicas have already promised a higher ballot than ours; aborting");
+                            // sleep a random amount to give the other proposer a chance to finish
+                            contentions++;
+                            return sleep_and_restart();
                         });
                     });
                 }
@@ -934,12 +931,11 @@ future<paxos::prepare_summary> paxos_response_handler::prepare_ballot(utils::UUI
                 if (fbu::is_me(peer)) {
                     tracing::trace(tr_state, "prepare_ballot: prepare {} locally", ballot);
                     return paxos::paxos_state::prepare(tr_state, _schema, *_cmd, _key.key(), ballot, only_digest, da, _timeout);
-                } else {
-                    tracing::trace(tr_state, "prepare_ballot: sending prepare {} to {}", ballot, peer);
-                    netw::messaging_service& ms = netw::get_local_messaging_service();
-                    return ms.send_paxos_prepare(peer, _timeout, *_cmd, _key.key(), ballot, only_digest, da,
-                            tracing::make_trace_info(tr_state));
                 }
+                tracing::trace(tr_state, "prepare_ballot: sending prepare {} to {}", ballot, peer);
+                netw::messaging_service& ms = netw::get_local_messaging_service();
+                return ms.send_paxos_prepare(peer, _timeout, *_cmd, _key.key(), ballot, only_digest, da,
+                        tracing::make_trace_info(tr_state));
             }).then_wrapped([this, &summary, &request_tracker, peer, ballot]
                               (future<paxos::prepare_response> response_f) mutable {
                 if (!request_tracker.p) {
@@ -1094,11 +1090,10 @@ future<bool> paxos_response_handler::accept_proposal(const paxos::proposal& prop
                 if (fbu::is_me(peer)) {
                     tracing::trace(tr_state, "accept_proposal: accept {} locally", proposal);
                     return paxos::paxos_state::accept(tr_state, _schema, proposal.update.decorated_key(*_schema).token(), proposal, _timeout);
-                } else {
-                    tracing::trace(tr_state, "accept_proposal: send accept {} to {}", proposal, peer);
-                    netw::messaging_service& ms = netw::get_local_messaging_service();
-                    return ms.send_paxos_accept(peer, _timeout, proposal, tracing::make_trace_info(tr_state));
                 }
+                tracing::trace(tr_state, "accept_proposal: send accept {} to {}", proposal, peer);
+                netw::messaging_service& ms = netw::get_local_messaging_service();
+                return ms.send_paxos_accept(peer, _timeout, proposal, tracing::make_trace_info(tr_state));
             }).then_wrapped([this, &request_tracker, timeout_if_partially_accepted, &proposal, peer] (future<bool> accepted_f) {
                 if (!request_tracker.p) {
                     accepted_f.ignore_ready_future();
@@ -1255,11 +1250,10 @@ void paxos_response_handler::prune(utils::UUID ballot) {
         if (fbu::is_me(peer)) {
             tracing::trace(tr_state, "prune: prune {} locally", ballot);
             return paxos::paxos_state::prune(_schema, _key.key(), ballot, _timeout, tr_state);
-        } else {
-            tracing::trace(tr_state, "prune: send prune of {} to {}", ballot, peer);
-            netw::messaging_service& ms = netw::get_local_messaging_service();
-            return ms.send_paxos_prune(peer, _timeout, _schema->version(), _key.key(), ballot, tracing::make_trace_info(tr_state));
         }
+        tracing::trace(tr_state, "prune: send prune of {} to {}", ballot, peer);
+        netw::messaging_service& ms = netw::get_local_messaging_service();
+        return ms.send_paxos_prune(peer, _timeout, _schema->version(), _key.key(), ballot, tracing::make_trace_info(tr_state));
     }).finally([h = shared_from_this()] {
         h->_proxy->get_stats().cas_now_pruning--;
     });
@@ -1378,7 +1372,7 @@ future<> storage_proxy::response_wait(storage_proxy::response_id_type id, clock_
 }
 
 ::shared_ptr<abstract_write_response_handler>& storage_proxy::get_write_response_handler(storage_proxy::response_id_type id) {
-        return _response_handlers.find(id)->second;
+    return _response_handlers.find(id)->second;
 }
 
 storage_proxy::response_id_type storage_proxy::create_write_response_handler(keyspace& ks, db::consistency_level cl, db::write_type type, std::unique_ptr<mutation_holder> m,
@@ -2087,12 +2081,11 @@ gms::inet_address storage_proxy::find_leader_for_counter_update(const mutation& 
         auto& snitch = locator::i_endpoint_snitch::get_local_snitch_ptr();
         snitch->sort_by_proximity(utils::fb_utilities::get_broadcast_address(), live_endpoints);
         return live_endpoints[0];
-    } else {
-        // FIXME: favour ourselves to avoid additional hop?
-        static thread_local std::default_random_engine re{std::random_device{}()};
-        std::uniform_int_distribution<> dist(0, local_endpoints.size() - 1);
-        return local_endpoints[dist(re)];
     }
+    // FIXME: favour ourselves to avoid additional hop?
+    static thread_local std::default_random_engine re{std::random_device{}()};
+    std::uniform_int_distribution<> dist(0, local_endpoints.size() - 1);
+    return local_endpoints[dist(re)];
 }
 
 template<typename Range>
@@ -2653,9 +2646,8 @@ size_t storage_proxy::hint_to_dead_endpoints(std::unique_ptr<mutation_holder>& m
         return boost::count_if(targets, [this, &mh, tr_state = std::move(tr_state), &hints_manager] (gms::inet_address target) mutable -> bool {
             return mh->store_hint(hints_manager, target, tr_state);
         });
-    } else {
-        return 0;
     }
+    return 0;
 }
 
 future<> storage_proxy::schedule_repair(std::unordered_map<dht::token, std::unordered_map<gms::inet_address, std::optional<mutation>>> diffs, db::consistency_level cl, tracing::trace_state_ptr trace_state,
@@ -2869,9 +2861,8 @@ class data_read_resolver : public abstract_read_resolver {
                 }
                 if (_is_reversed) {
                     return _ck_cmp(*b.clustering, *a.clustering);
-                } else {
-                    return _ck_cmp(*a.clustering, *b.clustering);
                 }
+                return _ck_cmp(*a.clustering, *b.clustering);
             }
         };
 
@@ -3154,11 +3145,10 @@ public:
                 return false; // reply with empty partition array goes to the end of the sorted array
             } else if (rh.result->partitions().size() == 0) {
                 return true;
-            } else {
-                auto lhk = lh.result->partitions().back().mut().key();
-                auto rhk = rh.result->partitions().back().mut().key();
-                return lhk.ring_order_tri_compare(s, rhk) > 0;
             }
+            auto lhk = lh.result->partitions().back().mut().key();
+            auto rhk = rh.result->partitions().back().mut().key();
+            return lhk.ring_order_tri_compare(s, rhk) > 0;
         };
 
         // this array will have an entry for each partition which will hold all available versions
@@ -3355,15 +3345,14 @@ protected:
         if (fbu::is_me(ep)) {
             tracing::trace(_trace_state, "read_mutation_data: querying locally");
             return _proxy->query_mutations_locally(_schema, cmd, _partition_range, timeout, _trace_state);
-        } else {
-            auto& ms = netw::get_local_messaging_service();
-            tracing::trace(_trace_state, "read_mutation_data: sending a message to /{}", ep);
-            return ms.send_read_mutation_data(netw::messaging_service::msg_addr{ep, 0}, timeout, *cmd, _partition_range).then([this, ep](rpc::tuple<reconcilable_result, rpc::optional<cache_temperature>> result_and_hit_rate) {
-                auto&& [result, hit_rate] = result_and_hit_rate;
-                tracing::trace(_trace_state, "read_mutation_data: got response from /{}", ep);
-                return make_ready_future<rpc::tuple<foreign_ptr<lw_shared_ptr<reconcilable_result>>, cache_temperature>>(rpc::tuple(make_foreign(::make_lw_shared<reconcilable_result>(std::move(result))), hit_rate.value_or(cache_temperature::invalid())));
-            });
         }
+        auto& ms = netw::get_local_messaging_service();
+        tracing::trace(_trace_state, "read_mutation_data: sending a message to /{}", ep);
+        return ms.send_read_mutation_data(netw::messaging_service::msg_addr{ep, 0}, timeout, *cmd, _partition_range).then([this, ep](rpc::tuple<reconcilable_result, rpc::optional<cache_temperature>> result_and_hit_rate) {
+            auto&& [result, hit_rate] = result_and_hit_rate;
+            tracing::trace(_trace_state, "read_mutation_data: got response from /{}", ep);
+            return make_ready_future<rpc::tuple<foreign_ptr<lw_shared_ptr<reconcilable_result>>, cache_temperature>>(rpc::tuple(make_foreign(::make_lw_shared<reconcilable_result>(std::move(result))), hit_rate.value_or(cache_temperature::invalid())));
+        });
     }
     future<rpc::tuple<foreign_ptr<lw_shared_ptr<query::result>>, cache_temperature>> make_data_request(gms::inet_address ep, clock_type::time_point timeout, bool want_digest) {
         ++_proxy->get_stats().data_read_attempts.get_ep_stat(ep);
@@ -3373,15 +3362,14 @@ protected:
         if (fbu::is_me(ep)) {
             tracing::trace(_trace_state, "read_data: querying locally");
             return _proxy->query_result_local(_schema, _cmd, _partition_range, opts, _trace_state, timeout);
-        } else {
-            auto& ms = netw::get_local_messaging_service();
-            tracing::trace(_trace_state, "read_data: sending a message to /{}", ep);
-            return ms.send_read_data(netw::messaging_service::msg_addr{ep, 0}, timeout, *_cmd, _partition_range, opts.digest_algo).then([this, ep](rpc::tuple<query::result, rpc::optional<cache_temperature>> result_hit_rate) {
-                auto&& [result, hit_rate] = result_hit_rate;
-                tracing::trace(_trace_state, "read_data: got response from /{}", ep);
-                return make_ready_future<rpc::tuple<foreign_ptr<lw_shared_ptr<query::result>>, cache_temperature>>(rpc::tuple(make_foreign(::make_lw_shared<query::result>(std::move(result))), hit_rate.value_or(cache_temperature::invalid())));
-            });
         }
+        auto& ms = netw::get_local_messaging_service();
+        tracing::trace(_trace_state, "read_data: sending a message to /{}", ep);
+        return ms.send_read_data(netw::messaging_service::msg_addr{ep, 0}, timeout, *_cmd, _partition_range, opts.digest_algo).then([this, ep](rpc::tuple<query::result, rpc::optional<cache_temperature>> result_hit_rate) {
+            auto&& [result, hit_rate] = result_hit_rate;
+            tracing::trace(_trace_state, "read_data: got response from /{}", ep);
+            return make_ready_future<rpc::tuple<foreign_ptr<lw_shared_ptr<query::result>>, cache_temperature>>(rpc::tuple(make_foreign(::make_lw_shared<query::result>(std::move(result))), hit_rate.value_or(cache_temperature::invalid())));
+        });
     }
     future<rpc::tuple<query::result_digest, api::timestamp_type, cache_temperature>> make_digest_request(gms::inet_address ep, clock_type::time_point timeout) {
         ++_proxy->get_stats().digest_read_attempts.get_ep_stat(ep);
@@ -3389,17 +3377,16 @@ protected:
             tracing::trace(_trace_state, "read_digest: querying locally");
             return _proxy->query_result_local_digest(_schema, _cmd, _partition_range, _trace_state,
                         timeout, digest_algorithm(*_proxy));
-        } else {
-            auto& ms = netw::get_local_messaging_service();
-            tracing::trace(_trace_state, "read_digest: sending a message to /{}", ep);
-            return ms.send_read_digest(netw::messaging_service::msg_addr{ep, 0}, timeout, *_cmd,
-                        _partition_range, digest_algorithm(*_proxy)).then([this, ep] (
-                    rpc::tuple<query::result_digest, rpc::optional<api::timestamp_type>, rpc::optional<cache_temperature>> digest_timestamp_hit_rate) {
-                auto&& [d, t, hit_rate] = digest_timestamp_hit_rate;
-                tracing::trace(_trace_state, "read_digest: got response from /{}", ep);
-                return make_ready_future<rpc::tuple<query::result_digest, api::timestamp_type, cache_temperature>>(rpc::tuple(d, t ? t.value() : api::missing_timestamp, hit_rate.value_or(cache_temperature::invalid())));
-            });
         }
+        auto& ms = netw::get_local_messaging_service();
+        tracing::trace(_trace_state, "read_digest: sending a message to /{}", ep);
+        return ms.send_read_digest(netw::messaging_service::msg_addr{ep, 0}, timeout, *_cmd,
+                    _partition_range, digest_algorithm(*_proxy)).then([this, ep] (
+                rpc::tuple<query::result_digest, rpc::optional<api::timestamp_type>, rpc::optional<cache_temperature>> digest_timestamp_hit_rate) {
+            auto&& [d, t, hit_rate] = digest_timestamp_hit_rate;
+            tracing::trace(_trace_state, "read_digest: got response from /{}", ep);
+            return make_ready_future<rpc::tuple<query::result_digest, api::timestamp_type, cache_temperature>>(rpc::tuple(d, t ? t.value() : api::missing_timestamp, hit_rate.value_or(cache_temperature::invalid())));
+        });
     }
     future<> make_mutation_data_requests(lw_shared_ptr<query::read_command> cmd, data_resolver_ptr resolver, targets_iterator begin, targets_iterator end, clock_type::time_point timeout) {
         return parallel_for_each(begin, end, [this, &cmd, resolver = std::move(resolver), timeout] (gms::inet_address ep) {
@@ -3606,9 +3593,8 @@ public:
                     exec->_result_promise = promise<foreign_ptr<lw_shared_ptr<query::result>>>();
                     exec->reconcile(exec->_cl, timeout);
                     return exec->_result_promise.get_future().discard_result();
-                } else {
-                    return make_ready_future<>();
                 }
+                return make_ready_future<>();
             }).handle_exception([] (std::exception_ptr eptr) {
                 // ignore any failures during background repair
             });
@@ -3658,10 +3644,9 @@ public:
                     if (has_data) {
                         _proxy->get_stats().speculative_digest_reads++;
                         return make_digest_requests(resolver, _targets.end() - 1, _targets.end(), timeout);
-                    } else {
-                        _proxy->get_stats().speculative_data_reads++;
-                        return make_data_requests(resolver, _targets.end() - 1, _targets.end(), timeout, true);
                     }
+                    _proxy->get_stats().speculative_data_reads++;
+                    return make_data_requests(resolver, _targets.end() - 1, _targets.end(), timeout, true);
                 };
                 // Waited on indirectly.
                 (void)send_request(resolver->has_data()).finally([exec = shared_from_this()]{});
@@ -3684,12 +3669,11 @@ public:
             // likely to reply; better to let RR fail than the entire query.
             return when_all(make_data_requests(resolver, _targets.begin(), _targets.begin() + 2, timeout, want_digest),
                             make_digest_requests(resolver, _targets.begin() + 2, _targets.end(), timeout)).discard_result();
-        } else {
-            // not doing read repair; all replies are important, so it doesn't matter which nodes we
-            // perform data reads against vs digest.
-            return when_all(make_data_requests(resolver, _targets.begin(), _targets.begin() + 1, timeout, want_digest),
-                            make_digest_requests(resolver, _targets.begin() + 1, _targets.end() - 1, timeout)).discard_result();
         }
+        // not doing read repair; all replies are important, so it doesn't matter which nodes we
+        // perform data reads against vs digest.
+        return when_all(make_data_requests(resolver, _targets.begin(), _targets.begin() + 1, timeout, want_digest),
+                        make_digest_requests(resolver, _targets.begin() + 1, _targets.end() - 1, timeout)).discard_result();
     }
     virtual void got_cl() override {
         _speculate_timer.cancel();
@@ -3786,17 +3770,16 @@ db::read_repair_decision storage_proxy::new_read_repair_decision(const schema& s
         if (is_datacenter_local(cl) && !db::is_local(extra_replica)) {
             slogger.trace("read executor no extra target to speculate");
             return ::make_shared<never_speculating_read_executor>(schema, cf, p, cmd, std::move(pr), cl, std::move(target_replicas), std::move(trace_state), std::move(permit));
-        } else {
-            target_replicas.push_back(extra_replica);
-            slogger.trace("creating read executor with extra target {}", extra_replica);
         }
+        target_replicas.push_back(extra_replica);
+        slogger.trace("creating read executor with extra target {}", extra_replica);
     }
 
     if (retry_type == speculative_retry::type::ALWAYS) {
         return ::make_shared<always_speculating_read_executor>(schema, cf, p, cmd, std::move(pr), cl, block_for, std::move(target_replicas), std::move(trace_state), std::move(permit));
-    } else {// PERCENTILE or CUSTOM.
-        return ::make_shared<speculating_read_executor>(schema, cf, p, cmd, std::move(pr), cl, block_for, std::move(target_replicas), std::move(trace_state), std::move(permit));
     }
+    // PERCENTILE or CUSTOM.
+    return ::make_shared<speculating_read_executor>(schema, cf, p, cmd, std::move(pr), cl, block_for, std::move(target_replicas), std::move(trace_state), std::move(permit));
 }
 
 future<rpc::tuple<query::result_digest, api::timestamp_type, cache_temperature>>
@@ -3822,14 +3805,13 @@ storage_proxy::query_result_local(schema_ptr s, lw_shared_ptr<query::read_comman
                 return make_ready_future<rpc::tuple<foreign_ptr<lw_shared_ptr<query::result>>, cache_temperature>>(rpc::tuple(make_foreign(std::move(f)), ht));
             });
         });
-    } else {
-        // FIXME: adjust multishard_mutation_query to accept an smp_service_group and propagate it there
-        return query_nonsingular_mutations_locally(s, cmd, {pr}, std::move(trace_state), max_size, timeout).then([s, cmd, opts] (rpc::tuple<foreign_ptr<lw_shared_ptr<reconcilable_result>>, cache_temperature>&& r_ht) {
-            auto&& [r, ht] = r_ht;
-            return make_ready_future<rpc::tuple<foreign_ptr<lw_shared_ptr<query::result>>, cache_temperature>>(
-                    rpc::tuple(::make_foreign(::make_lw_shared(to_data_query_result(*r, s, cmd->slice,  cmd->row_limit, cmd->partition_limit, opts))), ht));
-        });
     }
+    // FIXME: adjust multishard_mutation_query to accept an smp_service_group and propagate it there
+    return query_nonsingular_mutations_locally(s, cmd, {pr}, std::move(trace_state), max_size, timeout).then([s, cmd, opts] (rpc::tuple<foreign_ptr<lw_shared_ptr<reconcilable_result>>, cache_temperature>&& r_ht) {
+        auto&& [r, ht] = r_ht;
+        return make_ready_future<rpc::tuple<foreign_ptr<lw_shared_ptr<query::result>>, cache_temperature>>(
+                rpc::tuple(::make_foreign(::make_lw_shared(to_data_query_result(*r, s, cmd->slice,  cmd->row_limit, cmd->partition_limit, opts))), ht));
+    });
 }
 
 void storage_proxy::handle_read_error(std::exception_ptr eptr, bool range) {
@@ -4078,12 +4060,11 @@ storage_proxy::query_partition_key_range_concurrent(storage_proxy::clock_type::t
                 }
             }
             return make_ready_future<query_partition_key_range_concurrent_result>(query_partition_key_range_concurrent_result{std::move(results), std::move(used_replicas)});
-        } else {
-            cmd->row_limit = remaining_row_count;
-            cmd->partition_limit = remaining_partition_count;
-            return p->query_partition_key_range_concurrent(timeout, std::move(results), cmd, cl, std::move(ranges_to_vnodes),
-                    concurrency_factor * 2, std::move(trace_state), remaining_row_count, remaining_partition_count, std::move(preferred_replicas), std::move(permit));
         }
+        cmd->row_limit = remaining_row_count;
+        cmd->partition_limit = remaining_partition_count;
+        return p->query_partition_key_range_concurrent(timeout, std::move(results), cmd, cl, std::move(ranges_to_vnodes),
+                concurrency_factor * 2, std::move(trace_state), remaining_row_count, remaining_partition_count, std::move(preferred_replicas), std::move(permit));
     }).handle_exception([p] (std::exception_ptr eptr) {
         p->handle_read_error(eptr, true);
         return make_exception_future<query_partition_key_range_concurrent_result>(eptr);
@@ -4196,38 +4177,37 @@ storage_proxy::do_query(schema_ptr s,
 
     if (db::is_serial_consistency(cl)) {
         return do_query_with_paxos(std::move(s), std::move(cmd), std::move(partition_ranges), cl, std::move(query_options));
-    } else {
-        utils::latency_counter lc;
-        lc.start();
-        auto p = shared_from_this();
-
-        if (query::is_single_partition(partition_ranges[0])) { // do not support mixed partitions (yet?)
-            try {
-                return query_singular(cmd,
-                        std::move(partition_ranges),
-                        cl,
-                        std::move(query_options)).finally([lc, p] () mutable {
-                    p->get_stats().read.mark(lc.stop().latency());
-                    if (lc.is_start()) {
-                        p->get_stats().estimated_read.add(lc.latency(), p->get_stats().read.hist.count);
-                    }
-                });
-            } catch (const no_such_column_family&) {
-                get_stats().read.mark(lc.stop().latency());
-                return make_empty();
-            }
-        }
-
-        return query_partition_key_range(cmd,
-                std::move(partition_ranges),
-                cl,
-                std::move(query_options)).finally([lc, p] () mutable {
-            p->get_stats().range.mark(lc.stop().latency());
-            if (lc.is_start()) {
-                p->get_stats().estimated_range.add(lc.latency(), p->get_stats().range.hist.count);
-            }
-        });
     }
+    utils::latency_counter lc;
+    lc.start();
+    auto p = shared_from_this();
+
+    if (query::is_single_partition(partition_ranges[0])) { // do not support mixed partitions (yet?)
+        try {
+            return query_singular(cmd,
+                    std::move(partition_ranges),
+                    cl,
+                    std::move(query_options)).finally([lc, p] () mutable {
+                p->get_stats().read.mark(lc.stop().latency());
+                if (lc.is_start()) {
+                    p->get_stats().estimated_read.add(lc.latency(), p->get_stats().read.hist.count);
+                }
+            });
+        } catch (const no_such_column_family&) {
+            get_stats().read.mark(lc.stop().latency());
+            return make_empty();
+        }
+    }
+
+    return query_partition_key_range(cmd,
+            std::move(partition_ranges),
+            cl,
+            std::move(query_options)).finally([lc, p] () mutable {
+        p->get_stats().range.mark(lc.stop().latency());
+        if (lc.is_start()) {
+            p->get_stats().estimated_range.add(lc.latency(), p->get_stats().range.hist.count);
+        }
+    });
 }
 
 // WARNING: the function should be called on a shard that owns the key that is been read
@@ -4408,16 +4388,14 @@ future<bool> storage_proxy::cas(schema_ptr schema, shared_ptr<cas_request> reque
                             tracing::trace(handler->tr_state, "Using prefetched values for CAS precondition");
 
                             return make_ready_future<foreign_ptr<lw_shared_ptr<query::result>>>(std::move(v.data));
-                        } else {
-                            paxos::paxos_state::logger.debug("CAS[{}]: Reading existing values for CAS precondition",
-                                    handler->id());
-                            tracing::trace(handler->tr_state, "Reading existing values for CAS precondition");
-                            ++get_stats().cas_failed_read_round_optimization;
-                            return query(schema, cmd, std::move(partition_ranges), cl, query_options).then([](coordinator_query_result&& qr) {
-
-                                return make_ready_future<foreign_ptr<lw_shared_ptr<query::result>>>(std::move(qr.query_result));
-                            });
                         }
+                        paxos::paxos_state::logger.debug("CAS[{}]: Reading existing values for CAS precondition",
+                                handler->id());
+                        tracing::trace(handler->tr_state, "Reading existing values for CAS precondition");
+                        ++get_stats().cas_failed_read_round_optimization;
+                        return query(schema, cmd, std::move(partition_ranges), cl, query_options).then([](coordinator_query_result&& qr) {
+                            return make_ready_future<foreign_ptr<lw_shared_ptr<query::result>>>(std::move(qr.query_result));
+                        });
                     }();
                     return f.then([this, handler, schema, cmd, request, ballot = v.ballot, &contentions] (auto&& qr) {
                         auto mutation = request->apply(*qr, cmd->slice, utils::UUID_gen::micros_timestamp(ballot));
@@ -5070,9 +5048,8 @@ storage_proxy::query_mutations_locally(schema_ptr s, lw_shared_ptr<query::read_c
             });
           });
         });
-    } else {
-        return query_nonsingular_mutations_locally(std::move(s), std::move(cmd), {pr}, std::move(trace_state), max_size, timeout);
     }
+    return query_nonsingular_mutations_locally(std::move(s), std::move(cmd), {pr}, std::move(trace_state), max_size, timeout);
 }
 
 future<rpc::tuple<foreign_ptr<lw_shared_ptr<reconcilable_result>>, cache_temperature>>
@@ -5081,9 +5058,8 @@ storage_proxy::query_mutations_locally(schema_ptr s, lw_shared_ptr<query::read_c
                                        tracing::trace_state_ptr trace_state, uint64_t max_size) {
     if (!pr.second) {
         return query_mutations_locally(std::move(s), std::move(cmd), pr.first, timeout, std::move(trace_state), max_size);
-    } else {
-        return query_nonsingular_mutations_locally(std::move(s), std::move(cmd), pr, std::move(trace_state), max_size, timeout);
     }
+    return query_nonsingular_mutations_locally(std::move(s), std::move(cmd), pr, std::move(trace_state), max_size, timeout);
 }
 
 future<rpc::tuple<foreign_ptr<lw_shared_ptr<reconcilable_result>>, cache_temperature>>

@@ -102,14 +102,13 @@ future<prepare_response> paxos_state::prepare(tracing::trace_state_ptr tr_state,
                     return make_ready_future<prepare_response>(prepare_response(promise(std::move(state._accepted_proposal),
                                     std::move(state._most_recent_commit), std::move(data_or_digest))));
                 });
-            } else {
-                logger.debug("Promise rejected; {} is not sufficiently newer than {}", ballot, state._promised_ballot);
-                tracing::trace(tr_state, "Promise rejected; {} is not sufficiently newer than {}", ballot, state._promised_ballot);
-                // Return the currently promised ballot (rather than, e.g., the ballot of the last
-                // accepted proposal) so the coordinator can make sure it uses a newer ballot next
-                // time (#5667).
-                return make_ready_future<prepare_response>(prepare_response(std::move(state._promised_ballot)));
             }
+            logger.debug("Promise rejected; {} is not sufficiently newer than {}", ballot, state._promised_ballot);
+            tracing::trace(tr_state, "Promise rejected; {} is not sufficiently newer than {}", ballot, state._promised_ballot);
+            // Return the currently promised ballot (rather than, e.g., the ballot of the last
+            // accepted proposal) so the coordinator can make sure it uses a newer ballot next
+            // time (#5667).
+            return make_ready_future<prepare_response>(prepare_response(std::move(state._promised_ballot)));
         });
     }).finally([schema, lc] () mutable {
         auto& stats = get_local_storage_proxy().get_db().local().find_column_family(schema).get_stats();
@@ -138,13 +137,12 @@ future<bool> paxos_state::accept(tracing::trace_state_ptr tr_state, schema_ptr s
                     logger.debug("Accepting proposal {}", proposal);
                     tracing::trace(tr_state, "Accepting proposal {}", proposal);
                     return db::system_keyspace::save_paxos_proposal(*schema, proposal, timeout).then([] {
-                            return true;
+                        return true;
                     });
-                } else {
-                    logger.debug("Rejecting proposal for {} because in_progress is now {}", proposal, state._promised_ballot);
-                    tracing::trace(tr_state, "Rejecting proposal for {} because in_progress is now {}", proposal, state._promised_ballot);
-                    return make_ready_future<bool>(false);
                 }
+                logger.debug("Rejecting proposal for {} because in_progress is now {}", proposal, state._promised_ballot);
+                tracing::trace(tr_state, "Rejecting proposal for {} because in_progress is now {}", proposal, state._promised_ballot);
+                return make_ready_future<bool>(false);
             });
         });
     }).finally([schema, lc] () mutable {
