@@ -32,13 +32,13 @@ inline typename basic_value_view<is_mutable>::iterator& basic_value_view<is_muta
         _view = fragment_type();
     } else if (_left > cell::effective_external_chunk_length) {
         cell::chunk_context ctx(_next);
-        auto v = cell::external_chunk::make_view(_next, ctx);
+        auto v = cell::external_chunk::structure::make_view(_next, ctx);
         _next = static_cast<uint8_t*>(v.template get<cell::tags::chunk_next>(ctx).load());
         _view = v.template get<cell::tags::chunk_data>(ctx);
         _left -= cell::effective_external_chunk_length;
     } else {
         cell::last_chunk_context ctx(_next);
-        auto v = cell::external_last_chunk::make_view(_next, ctx);
+        auto v = cell::external_last_chunk::structure::make_view(_next, ctx);
         _view = v.template get<cell::tags::chunk_data>(ctx);
         _next = nullptr;
     }

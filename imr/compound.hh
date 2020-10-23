@@ -561,7 +561,8 @@ public:
     static size_t offset_of(const uint8_t* in, const Context& context = no_context) noexcept {
         static constexpr auto idx = internal::get_member_index<Tag, Members...>;
         size_t total_size = 0;
-        meta::for_each<meta::take<idx, Members...>>([&] (auto ptr) noexcept {
+        meta::for_each<meta::take<idx, Members...>>(
+                [&] <typename MemberTag, typename MemberType> (imr::member<MemberTag, MemberType>* ptr) noexcept {
             using member = std::remove_pointer_t<decltype(ptr)>;
             auto offset = in + total_size;
             auto this_size = member::type::serialized_object_size(offset, context.template context_for<typename member::tag>(offset));
@@ -587,5 +588,22 @@ public:
 
 template<typename Tag, typename T>
 struct tagged_type : T { };
+
+template<typename... Members>
+struct struct_helper {
+    template<typename Tag, typename Context = no_context_t>
+    static size_t offset_of(const uint8_t* in, const Context& context = no_context) noexcept {
+        static constexpr auto idx = internal::get_member_index<Tag, Members...>;
+        size_t total_size = 0;
+        meta::for_each<meta::take<idx, Members...>>(
+                [&] <typename MemberTag, typename MemberType> (imr::member<MemberTag, MemberType>* ptr) noexcept {
+            using member = std::remove_pointer_t<decltype(ptr)>;
+            auto offset = in + total_size;
+            auto this_size = member::type::serialized_object_size(offset, context.template context_for<typename member::tag>(offset));
+            total_size += this_size;
+        });
+        return total_size;
+    }
+};
 
 }

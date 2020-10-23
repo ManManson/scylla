@@ -28,10 +28,13 @@
 
 namespace meta {
 
-// Wrappers that allows returning a list of types. All helpers defined in this
+// Wrapper that allows returning a list of types. All helpers defined in this
 // file accept both unpacked and packed lists of types.
 template<typename... Ts>
-struct list { };
+struct list {
+    template <template <typename...> typename T>
+    using apply = T<Ts...>;
+};
 
 namespace internal {
 
@@ -171,5 +174,15 @@ constexpr size_t size = internal::get_size<Ts...>::value;
 
 template<template <class> typename Predicate, typename... Ts>
 static constexpr bool all_of = std::conjunction_v<Predicate<Ts>...>;
+
+template<typename T, typename... Ts>
+struct prepend {
+    using type = list<T, Ts...>;
+};
+
+template<typename T, typename... Ts>
+struct prepend<T, list<Ts...>> {
+    using type = list<T, Ts...>;
+};
 
 }

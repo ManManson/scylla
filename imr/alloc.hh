@@ -103,7 +103,7 @@ public:
 
     virtual size_t size(const void* obj_ptr) const noexcept override {
         auto ptr = static_cast<const uint8_t*>(obj_ptr);
-        return Structure::serialized_object_size(ptr, CtxFactory::create(ptr));
+        return Structure::structure::serialized_object_size(ptr, CtxFactory::create(ptr));
     }
 };
 
@@ -231,7 +231,7 @@ public:
         template<typename T, typename... Args>
         auto do_allocate_nested(migrate_fn_type* migrate_fn, Args&& ... args) noexcept {
             auto n = _parent.request(0, migrate_fn);
-            return T::get_sizer(continuation(_parent, n),
+            return T::structure::get_sizer(continuation(_parent, n),
                                 std::forward<Args>(args)...);
         }
     };
@@ -280,7 +280,7 @@ public:
         template<typename T, typename... Args>
         auto do_allocate_nested(migrate_fn_type*, Args&& ... args) noexcept {
             auto ptr = _parent.next_object();
-            return T::get_serializer(ptr,
+            return T::structure::get_serializer(ptr,
                                      continuation(ptr),
                                      std::forward<Args>(args)...);
         }

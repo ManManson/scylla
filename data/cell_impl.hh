@@ -56,12 +56,12 @@ inline basic_value_view<is_mutable> cell::variable_value::do_make_view(structure
                 auto ex_ptr = static_cast<uint8_t*>(ptr.load());
                 if (size > cell::effective_external_chunk_length) {
                     auto ex_ctx = chunk_context(ex_ptr);
-                    auto ex_view = external_chunk::make_view(ex_ptr, ex_ctx);
+                    auto ex_view = external_chunk::structure::make_view(ex_ptr, ex_ctx);
                     auto next = static_cast<uint8_t*>(ex_view.get<tags::chunk_next>().load());
                     return basic_value_view<is_mutable>(ex_view.get<tags::chunk_data>(ex_ctx), size - cell::effective_external_chunk_length, next);
                 } else {
                     auto ex_ctx = last_chunk_context(ex_ptr);
-                    auto ex_view = external_last_chunk::make_view(ex_ptr, ex_ctx);
+                    auto ex_view = external_last_chunk::structure::make_view(ex_ptr, ex_ctx);
                     assert(ex_view.get<tags::chunk_data>(ex_ctx).size() == size);
                     return basic_value_view<is_mutable>(ex_view.get<tags::chunk_data>(ex_ctx), 0, nullptr);
                 }

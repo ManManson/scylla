@@ -100,10 +100,39 @@ struct cell {
         imr::member<tags::data, imr::buffer<tags::data>>
     >;
 
-    using variable_value_structure = imr::structure<
-        imr::member<tags::value_size, imr::pod<uint32_t>>,
-        imr::member<tags::value_data, variable_value_data_variant>
-    >;
+    struct variable_value_structure {
+        using members = meta::list<
+            imr::member<tags::value_size, imr::pod<uint32_t>>,
+            imr::member<tags::value_data, variable_value_data_variant>
+        >;
+        using structure = members::apply<imr::structure>;
+        using offset_helper = members::apply<imr::struct_helper>;
+
+        template<typename Context = imr::no_context_t>
+        static size_t serialized_object_size(const uint8_t* in, const Context& context = imr::no_context) noexcept {
+            return structure::serialized_object_size(in, context);
+        }
+
+        template<typename Context>
+        static structure::view make_view(const uint8_t* in, const Context& context = imr::no_context) noexcept {
+            return structure::make_view<Context>(in, context);
+        }
+
+        template<typename Context>
+        static structure::mutable_view make_view(uint8_t* in, const Context& context = imr::no_context) noexcept {
+            return structure::make_view<Context>(in, context);
+        }
+
+        template<typename Writer, typename... Args>
+        static size_t size_when_serialized(Writer&& writer, Args&&... args) noexcept {
+            return structure::size_when_serialized(std::forward<Writer>(writer), std::forward<Args>(args)...);
+        }
+
+        template<typename Writer, typename... Args>
+        static size_t serialize(uint8_t* out, Writer&& writer, Args&&... args) noexcept {
+            return structure::serialize(out, std::forward<Writer>(writer), std::forward<Args>(args)...);
+        }
+    };
 
     /// Cell value
     ///
@@ -177,9 +206,9 @@ struct cell {
         { }
 
         template<typename Serializer, typename Allocator>
-        requires (imr::is_sizer_for_v<variable_value_structure, Serializer>
+        requires (imr::is_sizer_for_v<variable_value_structure::structure, Serializer>
                 && std::is_same_v<Allocator, imr::alloc::object_allocator::sizer>)
-            || (imr::is_serializer_for_v<variable_value_structure, Serializer>
+            || (imr::is_serializer_for_v<variable_value_structure::structure, Serializer>
                 && std::is_same_v<Allocator, imr::alloc::object_allocator::serializer>)
         auto operator()(Serializer serializer, Allocator allocations) {
             auto after_size = serializer.serialize(_value_size);
@@ -229,7 +258,8 @@ struct cell {
     /// larger.
     struct variable_value {
         using data_variant = variable_value_data_variant;
-        using structure = variable_value_structure;
+        using structure = variable_value_structure::structure;
+        using offset_helper = variable_value_structure::offset_helper;
 
         /// Create writer of a variable-size value
         ///
@@ -288,14 +318,46 @@ struct cell {
     /// Counter cells may be either sets of shards or a delta. The former is not
     /// fully converted to the IMR yet and still use a custom serilalisation
     /// format. The IMR treats such cells the same way it handles regular blobs.
-    using atomic_cell = imr::structure<
-        imr::member<tags::timestamp, imr::pod<api::timestamp_type>>,
-        imr::optional_member<tags::expiring, imr::structure<
-            imr::member<tags::ttl, imr::pod<int32_t>>,
-            imr::member<tags::expiry, imr::pod<int64_t>>
-        >>,
-        imr::member<tags::value, value_variant>
-    >;
+    struct atomic_cell {
+        using members = meta::list<
+            imr::member<tags::timestamp, imr::pod<api::timestamp_type>>,
+            imr::optional_member<tags::expiring, imr::structure<
+                imr::member<tags::ttl, imr::pod<int32_t>>,
+                imr::member<tags::expiry, imr::pod<int64_t>>
+            >>,
+            imr::member<tags::value, value_variant>
+        >;
+        using structure = members::apply<imr::structure>;
+        using offset_helper = members::apply<imr::struct_helper>;
+
+        template<typename Continuation>
+        using continuation_with_members = meta::prepend<Continuation, members>::type;
+
+        template<typename Context = imr::no_context_t>
+        static size_t serialized_object_size(const uint8_t* in, const Context& context = imr::no_context) noexcept {
+            return structure::serialized_object_size(in, context);
+        }
+
+        template<typename Context>
+        static structure::view make_view(const uint8_t* in, const Context& context = imr::no_context) noexcept {
+            return structure::make_view<Context>(in, context);
+        }
+
+        template<typename Context>
+        static structure::mutable_view make_view(uint8_t* in, const Context& context = imr::no_context) noexcept {
+            return structure::make_view<Context>(in, context);
+        }
+
+        template<typename Continuation = imr::no_op_continuation>
+        static typename continuation_with_members<Continuation>::apply<imr::internal::structure_serializer> get_serializer(uint8_t* out, Continuation cont = imr::no_op_continuation()) {
+            return structure::get_serializer(out, std::move(cont));
+        }
+
+        template<typename Continuation = imr::no_op_continuation>
+        static typename continuation_with_members<Continuation>::apply<imr::internal::structure_sizer> get_sizer(Continuation cont = imr::no_op_continuation()) {
+            return structure::get_sizer(std::move(cont));
+        }
+    };
     using atomic_cell_or_collection = imr::variant<tags::cell,
         imr::member<tags::atomic_cell, atomic_cell>,
         imr::member<tags::collection, variable_value::structure>
@@ -321,11 +383,13 @@ struct cell {
     /// no larger than maximum_external_chunk_length. The gross size (including
     /// the chunk header) of all chunks, but the last one is always
     /// maximum_external_chunk_length.
-    using external_chunk = imr::structure<
-        imr::member<tags::chunk_back_pointer, imr::tagged_type<tags::chunk_back_pointer, imr::pod<uint8_t*>>>,
-        imr::member<tags::chunk_next, imr::pod<uint8_t*>>,
-        imr::member<tags::chunk_data, imr::buffer<tags::chunk_data>>
-    >;
+    struct external_chunk {
+        using structure = imr::structure<
+            imr::member<tags::chunk_back_pointer, imr::tagged_type<tags::chunk_back_pointer, imr::pod<uint8_t*>>>,
+            imr::member<tags::chunk_next, imr::pod<uint8_t*>>,
+            imr::member<tags::chunk_data, imr::buffer<tags::chunk_data>>
+        >;
+    };
     static constexpr size_t external_chunk_overhead = sizeof(uint8_t*) * 2;
     static constexpr size_t effective_external_chunk_length = maximum_external_chunk_length - external_chunk_overhead;
 
@@ -336,11 +400,13 @@ struct cell {
     /// Due to the requirements the LSA imposes on migrators we need to store
     /// the size inside it so that it can be retrieved when the LSA migrates
     /// object.
-    using external_last_chunk = imr::structure<
-        imr::member<tags::chunk_back_pointer, imr::tagged_type<tags::chunk_back_pointer, imr::pod<uint8_t*>>>,
-        imr::member<tags::last_chunk_size, external_last_chunk_size>,
-        imr::member<tags::chunk_data, imr::buffer<tags::chunk_data>>
-    >;
+    struct external_last_chunk {
+        using structure = imr::structure<
+            imr::member<tags::chunk_back_pointer, imr::tagged_type<tags::chunk_back_pointer, imr::pod<uint8_t*>>>,
+            imr::member<tags::last_chunk_size, external_last_chunk_size>,
+            imr::member<tags::chunk_data, imr::buffer<tags::chunk_data>>
+        >;
+    };
     static constexpr size_t external_last_chunk_overhead = sizeof(uint8_t*) + sizeof(uint16_t);
 
     class context;
@@ -368,7 +434,7 @@ struct cell {
         uint16_t _size;
     public:
         explicit last_chunk_context(const uint8_t* ptr) noexcept
-                : _size(external_last_chunk::get_member<tags::last_chunk_size>(ptr).load())
+                : _size(external_last_chunk::structure::get_member<tags::last_chunk_size>(ptr).load())
         { }
 
         template<typename Tag>
@@ -697,7 +763,7 @@ private:
     flags::view flags_view() const noexcept {
         return _view.template get<tags::flags>();
     }
-    atomic_cell::basic_view<is_mutable> cell_view() const noexcept {
+    atomic_cell::structure::basic_view<is_mutable> cell_view() const noexcept {
         return _view.template get<tags::cell>().template as<tags::atomic_cell>();
     }
     context make_context() const noexcept {
@@ -857,7 +923,7 @@ struct destructor<data::cell::structure> {
                     return ptr + cell_offset;
                 } else {
                     auto ctx = data::cell::minimal_context(flags);
-                    auto offset = data::cell::atomic_cell::offset_of<data::cell::tags::value>(ptr + cell_offset, ctx);
+                    auto offset = data::cell::atomic_cell::offset_helper::offset_of<data::cell::tags::value>(ptr + cell_offset, ctx);
                     return ptr + cell_offset + offset;
                 }
             }();
@@ -878,11 +944,11 @@ struct mover<data::cell::structure> {
                     return ptr + cell_offset;
                 } else {
                     auto ctx = data::cell::minimal_context(flags);
-                    auto offset = data::cell::atomic_cell::offset_of<data::cell::tags::value>(ptr + cell_offset, ctx);
+                    auto offset = data::cell::atomic_cell::offset_helper::offset_of<data::cell::tags::value>(ptr + cell_offset, ctx);
                     return ptr + cell_offset + offset;
                 }
             }();
-            variable_value_ptr += data::cell::variable_value::structure::offset_of<data::cell::tags::value_data>(variable_value_ptr);
+            variable_value_ptr += data::cell::variable_value::offset_helper::offset_of<data::cell::tags::value_data>(variable_value_ptr);
             imr::methods::move<imr::tagged_type<data::cell::tags::pointer, imr::pod<uint8_t*>>>(variable_value_ptr);
         }
     }
@@ -912,7 +978,7 @@ struct mover<imr::tagged_type<data::cell::tags::pointer, imr::pod<uint8_t*>>> {
     static void run(uint8_t* ptr, ...) {
         auto ptr_view = imr::pod<uint8_t*>::make_view(ptr);
         auto chk_ptr = ptr_view.load();
-        auto chk = data::cell::external_last_chunk::make_view(chk_ptr, data::cell::last_chunk_context(chk_ptr));
+        auto chk = data::cell::external_last_chunk::structure::make_view(chk_ptr, data::cell::last_chunk_context(chk_ptr));
         chk.get<data::cell::tags::chunk_back_pointer>().store(ptr);
     }
 };
@@ -936,7 +1002,7 @@ struct destructor<data::cell::external_chunk> {
         while (true) {
             ctx.next_chunk();
 
-            auto echk_view = data::cell::external_chunk::make_view(ptr);
+            auto echk_view = data::cell::external_chunk::structure::make_view(ptr);
             auto ptr_view = echk_view.get<data::cell::tags::chunk_next>();
             if (ctx.is_last_chunk()) {
                 imr::methods::destroy<data::cell::external_last_chunk>(ptr_view.load());
@@ -962,7 +1028,7 @@ struct destructor<data::cell::external_chunk> {
 template<>
 struct mover<data::cell::external_chunk> {
     static void run(uint8_t* ptr, ...) {
-        auto echk_view = data::cell::external_chunk::make_view(ptr, data::cell::chunk_context(ptr));
+        auto echk_view = data::cell::external_chunk::structure::make_view(ptr, data::cell::chunk_context(ptr));
         auto next_ptr = echk_view.get<data::cell::tags::chunk_next>().load();
         auto bptr = imr::pod<uint8_t*>::make_view(next_ptr);
         bptr.store(ptr + echk_view.offset_of<data::cell::tags::chunk_next>());
