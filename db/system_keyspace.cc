@@ -211,6 +211,31 @@ schema_ptr batchlog() {
     return paxos;
 }
 
+schema_ptr raft() {
+    static thread_local auto schema = [] {
+        auto id = generate_legacy_id(NAME, RAFT);
+        return schema_builder(NAME, RAFT, std::optional(id))
+            .with_column("group_id", long_type, column_kind::partition_key)
+            // raft log part
+            .with_column("term", long_type, column_kind::clustering_key)
+            .with_column("index", long_type, column_kind::clustering_key)
+            .with_column("entry_type", byte_type) // either command (0), configuration (1) or dummy (2)
+            .with_column("data", bytes_type) // depends on command type, serialized
+            // persisted term and vote
+            .with_column("vote_term", long_type, column_kind::static_column)
+            .with_column("vote", uuid_type, column_kind::static_column)
+            // persisted snapshots info
+            .with_column("snapshot_id", uuid_type, column_kind::static_column)
+            .with_column("snapshot", bytes_type, column_kind::static_column) // serialized
+
+            .set_comment("Persisted RAFT log, votes and snapshot info")
+            .with_version(generate_schema_version(id))
+            .set_wait_for_sync_to_commitlog(true)
+            .build();
+    }();
+    return schema;
+}
+
 schema_ptr built_indexes() {
     static thread_local auto built_indexes = [] {
         schema_builder builder(make_shared_schema(generate_legacy_id(NAME, BUILT_INDEXES), NAME, BUILT_INDEXES,
@@ -1712,6 +1737,7 @@ std::vector<schema_ptr> all_tables() {
                     compactions_in_progress(), compaction_history(),
                     sstable_activity(), clients(), size_estimates(), large_partitions(), large_rows(), large_cells(),
                     scylla_local(), db::schema_tables::scylla_table_schema_history(),
+                    raft(),
                     v3::views_builds_in_progress(), v3::built_views(),
                     v3::scylla_views_builds_in_progress(),
                     v3::truncated(),
