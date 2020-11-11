@@ -100,6 +100,10 @@ struct configuration {
     }
     configuration() = default;
 
+    configuration(std::unordered_set<server_address> previous, std::unordered_set<server_address> current)
+        : previous(std::move(previous)), current(std::move(current)) 
+    {}
+
     // Return true if the previous configuration is still
     // in use
     bool is_joint() const {
