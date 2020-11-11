@@ -22,16 +22,12 @@
 
 #include "raft/raft.hh"
 
-namespace raft {
-
-class system_table_based_storage : public raft::storage {
+class raft_sys_table_storage : public raft::storage {
     uint64_t _group_id;
 
 public:
-    future<> store_term_and_vote(term_t term, server_id vote) override;
-    future<std::pair<term_t, server_id>> load_term_and_vote() override;
-    future<log_entries> load_log() override;
-    future<snapshot> load_snapshot() override;
+    future<> store_term_and_vote(raft::term_t term, raft::server_id vote) override;
+    future<std::pair<raft::term_t, raft::server_id>> load_term_and_vote() override;
+    future<raft::log_entries> load_log() override;
+    future<raft::snapshot> load_snapshot() override;
 };
-
-} // namespace raft
