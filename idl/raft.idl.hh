@@ -52,4 +52,24 @@ struct snapshot {
     raft::snapshot_id id;
 };
 
+struct vote_request {
+    raft::term_t current_term;
+    raft::index_t last_log_idx;
+    raft::term_t last_log_term;
+};
+
+struct vote_reply {
+    raft::term_t current_term;
+    bool vote_granted;
+};
+
+struct install_snapshot {
+    raft::term_t current_term;
+    raft::snapshot snp;
+};
+
+struct snapshot_reply {
+    bool success;
+};
+
 }
