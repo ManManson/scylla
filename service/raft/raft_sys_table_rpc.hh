@@ -22,17 +22,14 @@
 
 #include "raft/raft.hh"
 
-class raft_sys_table_storage : public raft::storage {
-    uint64_t _group_id;
-
+class raft_sys_table_rpc : public raft::rpc {
 public:
-    future<> store_term_and_vote(raft::term_t term, raft::server_id vote) override;
-    future<std::pair<raft::term_t, raft::server_id>> load_term_and_vote() override;
-    future<raft::log_entries> load_log() override;
-    future<raft::snapshot> load_snapshot() override;
-
-    future<> store_snapshot(const raft::snapshot& snap, size_t preserve_log_entries) override;
-    future<> store_log_entries(const std::vector<raft::log_entry_ptr>& entries) override;
-    future<> truncate_log(raft::index_t idx) override;
+    future<> send_snapshot(raft::server_id server_id, const raft::install_snapshot& snap) override;
+    future<> send_append_entries(raft::server_id id, const raft::append_request_send& append_request) override;
+    future<> send_append_entries_reply(raft::server_id id, const raft::append_reply& reply) override;
+    future<> send_vote_request(raft::server_id id, const raft::vote_request& vote_request) override;
+    future<> send_vote_reply(raft::server_id id, const raft::vote_reply& vote_reply) override;
+    void add_server(raft::server_id id, raft::server_info info) override;
+    void remove_server(raft::server_id id) override;
     future<> abort() override;
 };

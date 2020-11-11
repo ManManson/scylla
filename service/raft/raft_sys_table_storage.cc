@@ -101,3 +101,21 @@ future<raft::snapshot> raft_sys_table_storage::load_snapshot() {
         return s;
     });
 }
+
+future<> raft_sys_table_storage::store_snapshot(const raft::snapshot& snap, size_t preserve_log_entries) {
+    throw std::runtime_error("Not implemented");
+
+}
+
+future<> raft_sys_table_storage::store_log_entries(const std::vector<raft::log_entry_ptr>& entries) {
+    throw std::runtime_error("Not implemented");
+
+}
+
+future<> raft_sys_table_storage::truncate_log(raft::index_t idx) {
+    throw std::runtime_error("Not implemented");
+}
+
+future<> raft_sys_table_storage::abort() {
+    throw std::runtime_error("Not implemented");
+}
