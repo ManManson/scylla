@@ -72,4 +72,16 @@ struct snapshot_reply {
     bool success;
 };
 
+struct append_reply {
+    struct rejected {
+        raft::index_t non_matching_idx;
+        raft::index_t last_idx;
+    };
+    struct accepted {
+        raft::index_t last_new_idx;
+    };
+    raft::index_t commit_idx;
+    std::variant<raft::append_reply::rejected, raft::append_reply::accepted> result;
+};
+
 }
