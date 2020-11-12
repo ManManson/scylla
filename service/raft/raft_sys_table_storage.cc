@@ -103,8 +103,9 @@ future<raft::snapshot> raft_sys_table_storage::load_snapshot() {
 }
 
 future<> raft_sys_table_storage::store_snapshot(const raft::snapshot& snap, size_t preserve_log_entries) {
-    throw std::runtime_error("Not implemented");
-
+    static const auto store_cql = format("INSERT INTO system.{} (group_id, snapshot_id, snapshot) VALUES (?, ?, ?)", db::system_keyspace::RAFT);
+    // TODO: handle `preserve_log_entries` argument
+    return db::execute_cql(store_cql, int64_t(_group_id), snap.id.id, ser::serialize_to_buffer<bytes>(snap)).discard_result();
 }
 
 future<> raft_sys_table_storage::store_log_entries(const std::vector<raft::log_entry_ptr>& entries) {
@@ -113,7 +114,9 @@ future<> raft_sys_table_storage::store_log_entries(const std::vector<raft::log_e
 }
 
 future<> raft_sys_table_storage::truncate_log(raft::index_t idx) {
-    throw std::runtime_error("Not implemented");
+    static const auto truncate_cql = format("DELETE FROM system.{} WHERE group_id = ? AND term >= 0 AND index >= ?", db::system_keyspace::RAFT);
+    // TODO: synchronize with store_log_entries
+    return db::execute_cql(truncate_cql, int64_t(_group_id), int64_t(idx)).discard_result();
 }
 
 future<> raft_sys_table_storage::abort() {
