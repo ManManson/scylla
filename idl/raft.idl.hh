@@ -30,7 +30,7 @@ struct tagged_id {
 
 template<typename Tag>
 struct tagged_uint64 {
-    uint64_t _val;
+    uint64_t get_value();
 };
 
 }

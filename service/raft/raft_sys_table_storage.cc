@@ -110,7 +110,6 @@ future<> raft_sys_table_storage::store_snapshot(const raft::snapshot& snap, size
 
 future<> raft_sys_table_storage::store_log_entries(const std::vector<raft::log_entry_ptr>& entries) {
     throw std::runtime_error("Not implemented");
-
 }
 
 future<> raft_sys_table_storage::truncate_log(raft::index_t idx) {

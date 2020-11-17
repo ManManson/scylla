@@ -430,6 +430,7 @@ scylla_tests = set([
     'test/unit/row_cache_stress_test',
     'test/unit/bptree_stress_test',
     'test/unit/bptree_compaction_test',
+    'test/boost/raft_sys_table_storage_test'
 ])
 
 perf_tests = set([

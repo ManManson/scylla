@@ -26,6 +26,10 @@ class raft_sys_table_storage : public raft::storage {
     uint64_t _group_id;
 
 public:
+    explicit raft_sys_table_storage(uint64_t group_id)
+        : _group_id(group_id)
+    {}
+
     future<> store_term_and_vote(raft::term_t term, raft::server_id vote) override;
     future<std::pair<raft::term_t, raft::server_id>> load_term_and_vote() override;
     future<raft::log_entries> load_log() override;
