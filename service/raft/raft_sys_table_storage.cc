@@ -29,9 +29,16 @@
 #include "serializer_impl.hh"
 #include "serialization_visitors.hh"
 
+#include "cql3/statements/batch_statement.hh"
+
 raft_sys_table_storage::raft_sys_table_storage(cql3::query_processor& qp, uint64_t group_id)
-    : _group_id(group_id), _qp(qp)
-{}
+    : _group_id(group_id), _qp(qp), _dummy_query_state(service::client_state::for_internal_calls(), empty_service_permit())
+{
+    static const auto store_cql = format("INSERT INTO system.{} (group_id, term, index, entry_type, data) VALUES (?, ?, ?, ?, ?)", db::system_keyspace::RAFT);
+    auto prepared_stmt_ptr = _qp.prepare_internal(store_cql);
+    shared_ptr<cql3::cql_statement> cql_stmt = prepared_stmt_ptr->statement;
+    _store_entry_stmt = dynamic_pointer_cast<cql3::statements::modification_statement>(cql_stmt);
+}
 
 future<> raft_sys_table_storage::store_term_and_vote(raft::term_t term, raft::server_id vote) {
     static const auto store_cql = format("INSERT INTO system.{} (group_id, vote_term, vote) VALUES (?, ?, ?)", db::system_keyspace::RAFT);
@@ -118,8 +125,37 @@ future<> raft_sys_table_storage::store_snapshot(const raft::snapshot& snap, size
 }
 
 future<> raft_sys_table_storage::store_log_entries(const std::vector<raft::log_entry_ptr>& entries) {
-    // static const auto store_cql = format("INSERT INTO system.{} (group_id, term, index, entry_type, data) VALUES (?, ?, ?, ?, ?)", db::system_keyspace::RAFT);
-    throw std::runtime_error("Not implemented");
+    if (entries.empty()) {
+        return make_ready_future<>();
+    }
+    std::vector<cql3::statements::batch_statement::single_statement> batch_stmts;
+    std::vector<std::vector<cql3::raw_value>> stmt_values;
+    const size_t entries_size = entries.size();
+    batch_stmts.reserve(entries_size);
+    stmt_values.reserve(entries_size);
+
+    for(const raft::log_entry_ptr& eptr : entries) {
+        cql3::statements::batch_statement::single_statement stmt(_store_entry_stmt, false);
+        std::vector<cql3::raw_value> single_stmt_values = {
+            cql3::raw_value::make_value(long_type->decompose(int64_t(_group_id))),
+            cql3::raw_value::make_value(long_type->decompose(int64_t(eptr->term))),
+            cql3::raw_value::make_value(long_type->decompose(int64_t(eptr->idx))),
+            cql3::raw_value::make_value(byte_type->decompose(int8_t(eptr->data.index()))),
+            cql3::raw_value::make_value(ser::serialize_to_buffer<bytes>(eptr->data))
+        };
+        batch_stmts.emplace_back(std::move(stmt));
+        stmt_values.emplace_back(std::move(single_stmt_values));
+    }
+
+    return do_with(
+        cql3::query_options::make_batch_options(
+            cql3::query_options(cql3::default_cql_config, db::consistency_level::ONE, infinite_timeout_config, std::nullopt, std::vector<cql3::raw_value>{}, false, cql3::query_options::specific_options::DEFAULT, cql_serialization_format::latest()),
+            std::move(stmt_values)),
+        cql3::statements::batch_statement(cql3::statements::batch_statement::type::UNLOGGED, std::move(batch_stmts), cql3::attributes::none(), _qp.get_cql_stats()),
+        [this] (const cql3::query_options& batch_options, cql3::statements::batch_statement& batch) {
+            // TODO: handle errors?
+            return batch.execute(_qp.proxy(), _dummy_query_state, batch_options).discard_result();
+        });
 }
 
 future<> raft_sys_table_storage::truncate_log(raft::index_t idx) {

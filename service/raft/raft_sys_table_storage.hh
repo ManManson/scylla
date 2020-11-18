@@ -29,6 +29,7 @@ class raft_sys_table_storage : public raft::storage {
     uint64_t _group_id;
     shared_ptr<cql3::statements::modification_statement> _store_entry_stmt;
     cql3::query_processor& _qp;
+    service::query_state _dummy_query_state;
 
 public:
     explicit raft_sys_table_storage(cql3::query_processor& qp, uint64_t group_id);
