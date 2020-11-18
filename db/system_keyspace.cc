@@ -217,8 +217,8 @@ schema_ptr raft() {
         return schema_builder(NAME, RAFT, std::optional(id))
             .with_column("group_id", long_type, column_kind::partition_key)
             // raft log part
-            .with_column("term", long_type, column_kind::clustering_key)
             .with_column("index", long_type, column_kind::clustering_key)
+            .with_column("term", long_type)
             .with_column("entry_type", byte_type) // either command (0), configuration (1) or dummy (2)
             .with_column("data", bytes_type) // depends on command type, serialized
             // persisted term and vote
