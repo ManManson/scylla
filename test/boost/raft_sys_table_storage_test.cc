@@ -95,3 +95,25 @@ SEASTAR_TEST_CASE(test_store_snapshot) {
         BOOST_CHECK(snp == loaded_snp);
     });
 }
+
+SEASTAR_TEST_CASE(test_store_log_entries) {
+    return do_with_cql_env_thread([] (cql_test_env& env) {
+        cql3::query_processor& qp = env.local_qp();
+
+        raft_sys_table_storage storage(qp, group_id);
+
+        std::vector<raft::log_entry_ptr> entries = {
+            // command
+            //make_shared<raft::log_entry>(),
+            // configuration
+            //make_shared<raft::log_entry>(),
+            // dummy
+            make_lw_shared<raft::log_entry>(raft::log_entry{.term = raft::term_t(1), .idx = raft::index_t(2), .data = raft::log_entry::dummy()})
+        };
+
+        storage.store_log_entries(entries).get();
+        raft::log_entries loaded_entries = storage.load_log().get0();
+
+        //BOOST_CHECK_EQUAL(entries, loaded_entries);
+    });
+}
