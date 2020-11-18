@@ -50,11 +50,11 @@ bool operator ==(const raft::snapshot& lhs, const raft::snapshot& rhs) {
 
 } //anonymous namespace
 
+static constexpr uint64_t group_id = 0;
+
 SEASTAR_TEST_CASE(test_store_term_and_vote) {
     return do_with_cql_env_thread([] (cql_test_env& env) {
         cql3::query_processor& qp = env.local_qp();
-
-        static constexpr uint64_t group_id = 0;
 
         raft_sys_table_storage storage(qp, group_id);
 
@@ -72,8 +72,6 @@ SEASTAR_TEST_CASE(test_store_term_and_vote) {
 SEASTAR_TEST_CASE(test_store_snapshot) {
     return do_with_cql_env_thread([] (cql_test_env& env) {
         cql3::query_processor& qp = env.local_qp();
-
-        static constexpr uint64_t group_id = 0;
 
         raft_sys_table_storage storage(qp, group_id);
 
