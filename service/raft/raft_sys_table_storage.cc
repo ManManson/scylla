@@ -34,7 +34,7 @@
 raft_sys_table_storage::raft_sys_table_storage(cql3::query_processor& qp, uint64_t group_id)
     : _group_id(group_id), _qp(qp), _dummy_query_state(service::client_state::for_internal_calls(), empty_service_permit())
 {
-    static const auto store_cql = format("INSERT INTO system.{} (group_id, term, index, entry_type, data) VALUES (?, ?, ?, ?, ?)", db::system_keyspace::RAFT);
+    static const auto store_cql = format("INSERT INTO system.{} (group_id, term, \"index\", entry_type, data) VALUES (?, ?, ?, ?, ?)", db::system_keyspace::RAFT);
     auto prepared_stmt_ptr = _qp.prepare_internal(store_cql);
     shared_ptr<cql3::cql_statement> cql_stmt = prepared_stmt_ptr->statement;
     _store_entry_stmt = dynamic_pointer_cast<cql3::statements::modification_statement>(cql_stmt);
@@ -57,18 +57,16 @@ future<std::pair<raft::term_t, raft::server_id>> raft_sys_table_storage::load_te
     });
 }
 
-
 future<raft::log_entries> raft_sys_table_storage::load_log() {
-    static const auto load_cql = format("SELECT term, index, entry_type, data FROM system.{} WHERE group_id = ?", db::system_keyspace::RAFT);
+    static const auto load_cql = format("SELECT term, \"index\", entry_type, data FROM system.{} WHERE group_id = ?", db::system_keyspace::RAFT);
     return _qp.execute_internal(load_cql, {int64_t(_group_id)}).then([] (::shared_ptr<cql3::untyped_result_set> rs) {
         raft::log_entries log;
-        for(const auto& row : *rs) {
+        for (const auto& row : *rs) {
             seastar::thread::maybe_yield();
 
             raft::term_t term = raft::term_t(row.get_as<int64_t>("term"));
             raft::index_t idx = raft::index_t(row.get_as<int64_t>("index"));
             bytes_view raw_data = row.get_view("data");
-
             auto type = row.get_as<int8_t>("entry_type");
             std::variant<raft::command, raft::configuration, raft::log_entry::dummy> data;
             switch (type) {
@@ -134,14 +132,21 @@ future<> raft_sys_table_storage::store_log_entries(const std::vector<raft::log_e
     batch_stmts.reserve(entries_size);
     stmt_values.reserve(entries_size);
 
-    for(const raft::log_entry_ptr& eptr : entries) {
+    for (const raft::log_entry_ptr& eptr : entries) {
         cql3::statements::batch_statement::single_statement stmt(_store_entry_stmt, false);
+
+        bytes_ostream ser_str;
+        std::visit(overloaded_functor {
+            [&] (const raft::command& cmd) { ser_str = cmd; },
+            [&] (const auto& cfg_or_dummy) { ser::serialize(ser_str, cfg_or_dummy); }
+        }, eptr->data);
+
         std::vector<cql3::raw_value> single_stmt_values = {
             cql3::raw_value::make_value(long_type->decompose(int64_t(_group_id))),
             cql3::raw_value::make_value(long_type->decompose(int64_t(eptr->term))),
             cql3::raw_value::make_value(long_type->decompose(int64_t(eptr->idx))),
             cql3::raw_value::make_value(byte_type->decompose(int8_t(eptr->data.index()))),
-            cql3::raw_value::make_value(ser::serialize_to_buffer<bytes>(eptr->data))
+            cql3::raw_value::make_value(to_bytes(ser_str.linearize()))
         };
         batch_stmts.emplace_back(std::move(stmt));
         stmt_values.emplace_back(std::move(single_stmt_values));

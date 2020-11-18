@@ -28,27 +28,37 @@
 #include "test/lib/cql_test_env.hh"
 #include "cql3/query_processor.hh"
 
-namespace {
+namespace raft{
 
 // these operators provided exclusively for testing purposes
-bool operator ==(const raft::server_address& lhs, const raft::server_address& rhs) {
-    return lhs.id == rhs.id &&
-        lhs.info == rhs.info;
-}
-
-bool operator ==(const raft::configuration& lhs, const raft::configuration& rhs) {
+static bool operator==(const configuration& lhs, const configuration& rhs) {
     return lhs.previous == rhs.previous &&
         lhs.current == rhs.current;
 }
 
-bool operator ==(const raft::snapshot& lhs, const raft::snapshot& rhs) {
+static bool operator==(const snapshot& lhs, const snapshot& rhs) {
     return lhs.idx == rhs.idx &&
         lhs.term == rhs.term &&
         lhs.config == rhs.config &&
         lhs.id == rhs.id;
 }
 
-} //anonymous namespace
+static bool operator==(const log_entry::dummy&, const log_entry::dummy&) {
+    return true;
+}
+
+static bool operator==(const log_entry& lhs, const log_entry& rhs) {
+    if (std::holds_alternative<raft::command>(lhs.data)) {
+        const command& lhs_data = std::get<command>(lhs.data);
+        const command& rhs_data = std::get<command>(rhs.data);
+    }
+
+    return lhs.term == rhs.term &&
+        lhs.idx == rhs.idx &&
+        lhs.data == rhs.data;
+}
+
+} // namespace raft
 
 static constexpr uint64_t group_id = 0;
 
@@ -102,18 +112,33 @@ SEASTAR_TEST_CASE(test_store_log_entries) {
 
         raft_sys_table_storage storage(qp, group_id);
 
+        raft::command cmd;
+        ser::serialize(cmd, 123);
+
         std::vector<raft::log_entry_ptr> entries = {
             // command
-            //make_shared<raft::log_entry>(),
+            make_lw_shared(raft::log_entry{
+                .term = raft::term_t(1),
+                .idx = raft::index_t(2),
+                .data = std::move(cmd)}),
             // configuration
-            //make_shared<raft::log_entry>(),
+            make_lw_shared(raft::log_entry{
+                .term = raft::term_t(3),
+                .idx = raft::index_t(4),
+                .data = raft::configuration({raft::server_id{.id = utils::make_random_uuid()}})}),
             // dummy
-            make_lw_shared<raft::log_entry>(raft::log_entry{.term = raft::term_t(1), .idx = raft::index_t(2), .data = raft::log_entry::dummy()})
+            make_lw_shared(raft::log_entry{
+                .term = raft::term_t(5),
+                .idx = raft::index_t(6),
+                .data = raft::log_entry::dummy()})
         };
 
         storage.store_log_entries(entries).get();
         raft::log_entries loaded_entries = storage.load_log().get0();
 
-        //BOOST_CHECK_EQUAL(entries, loaded_entries);
+        BOOST_CHECK_EQUAL(entries.size(), loaded_entries.size());
+        for (size_t i = 0, end = entries.size(); i != end; ++i) {
+            BOOST_CHECK(*entries[i] == *loaded_entries[i]);
+        }
     });
 }
