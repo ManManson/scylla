@@ -62,10 +62,32 @@ static bool operator==(const log_entry& lhs, const log_entry& rhs) {
 
 static constexpr uint64_t group_id = 0;
 
+static std::vector<raft::log_entry_ptr> create_test_log() {
+    raft::command cmd;
+    ser::serialize(cmd, 123);
+
+    return {
+        // command
+        make_lw_shared(raft::log_entry{
+            .term = raft::term_t(1),
+            .idx = raft::index_t(1),
+            .data = std::move(cmd)}),
+        // configuration
+        make_lw_shared(raft::log_entry{
+            .term = raft::term_t(2),
+            .idx = raft::index_t(2),
+            .data = raft::configuration({raft::server_id{.id = utils::make_random_uuid()}})}),
+        // dummy
+        make_lw_shared(raft::log_entry{
+            .term = raft::term_t(3),
+            .idx = raft::index_t(3),
+            .data = raft::log_entry::dummy()})
+    };
+}
+
 SEASTAR_TEST_CASE(test_store_term_and_vote) {
     return do_with_cql_env_thread([] (cql_test_env& env) {
         cql3::query_processor& qp = env.local_qp();
-
         raft_sys_table_storage storage(qp, group_id);
 
         raft::term_t vote_term(1);
@@ -82,7 +104,6 @@ SEASTAR_TEST_CASE(test_store_term_and_vote) {
 SEASTAR_TEST_CASE(test_store_snapshot) {
     return do_with_cql_env_thread([] (cql_test_env& env) {
         cql3::query_processor& qp = env.local_qp();
-
         raft_sys_table_storage storage(qp, group_id);
 
         raft::term_t snp_term(1);
@@ -109,36 +130,64 @@ SEASTAR_TEST_CASE(test_store_snapshot) {
 SEASTAR_TEST_CASE(test_store_log_entries) {
     return do_with_cql_env_thread([] (cql_test_env& env) {
         cql3::query_processor& qp = env.local_qp();
-
         raft_sys_table_storage storage(qp, group_id);
 
-        raft::command cmd;
-        ser::serialize(cmd, 123);
-
-        std::vector<raft::log_entry_ptr> entries = {
-            // command
-            make_lw_shared(raft::log_entry{
-                .term = raft::term_t(1),
-                .idx = raft::index_t(2),
-                .data = std::move(cmd)}),
-            // configuration
-            make_lw_shared(raft::log_entry{
-                .term = raft::term_t(3),
-                .idx = raft::index_t(4),
-                .data = raft::configuration({raft::server_id{.id = utils::make_random_uuid()}})}),
-            // dummy
-            make_lw_shared(raft::log_entry{
-                .term = raft::term_t(5),
-                .idx = raft::index_t(6),
-                .data = raft::log_entry::dummy()})
-        };
-
+        std::vector<raft::log_entry_ptr> entries = create_test_log();
         storage.store_log_entries(entries).get();
         raft::log_entries loaded_entries = storage.load_log().get0();
 
         BOOST_CHECK_EQUAL(entries.size(), loaded_entries.size());
         for (size_t i = 0, end = entries.size(); i != end; ++i) {
             BOOST_CHECK(*entries[i] == *loaded_entries[i]);
+        }
+    });
+}
+
+SEASTAR_TEST_CASE(test_truncate_log) {
+    return do_with_cql_env_thread([] (cql_test_env& env) {
+        cql3::query_processor& qp = env.local_qp();
+        raft_sys_table_storage storage(qp, group_id);
+
+        std::vector<raft::log_entry_ptr> entries = create_test_log();
+        storage.store_log_entries(entries).get();
+        // truncate the last entry from the log
+        storage.truncate_log(raft::index_t(3)).get();
+
+        raft::log_entries loaded_entries = storage.load_log().get0();
+        BOOST_CHECK_EQUAL(loaded_entries.size(), 2);
+        for (size_t i = 0, end = loaded_entries.size(); i != end; ++i) {
+            BOOST_CHECK(*entries[i] == *loaded_entries[i]);
+        }
+    });
+}
+
+SEASTAR_TEST_CASE(test_store_snapshot_truncate_log_tail) {
+    return do_with_cql_env_thread([] (cql_test_env& env) {
+        cql3::query_processor& qp = env.local_qp();
+        raft_sys_table_storage storage(qp, group_id);
+
+        std::vector<raft::log_entry_ptr> entries = create_test_log();
+        storage.store_log_entries(entries).get();
+
+        raft::term_t snp_term(3);
+        raft::index_t snp_idx(3);
+        raft::configuration snp_cfg({raft::server_id{.id = utils::make_random_uuid()}});
+        raft::snapshot_id snp_id{.id = utils::make_random_uuid()};
+
+        raft::snapshot snp{
+            .idx = snp_idx,
+            .term = snp_term,
+            .config = std::move(snp_cfg),
+            .id = std::move(snp_id)};
+
+        // leave the last 2 entries in the log after saving the snapshot
+        static constexpr size_t preserve_log_entries = 2;
+
+        storage.store_snapshot(snp, preserve_log_entries).get();
+        raft::log_entries loaded_entries = storage.load_log().get0();
+        BOOST_CHECK_EQUAL(loaded_entries.size(), 2);
+        for (size_t i = 0, end = loaded_entries.size(); i != end; ++i) {
+            BOOST_CHECK(*entries[i + 1] == *loaded_entries[i]);
         }
     });
 }
