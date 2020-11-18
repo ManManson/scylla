@@ -86,7 +86,10 @@ SEASTAR_TEST_CASE(test_store_snapshot) {
             .config = std::move(snp_cfg),
             .id = std::move(snp_id)};
 
-        storage.store_snapshot(snp, 0 /*unused at the moment*/).get();
+        // supposedly larger than log size to keep the log intact
+        static constexpr size_t preserve_log_entries = 10;
+
+        storage.store_snapshot(snp, preserve_log_entries).get();
         raft::snapshot loaded_snp = storage.load_snapshot().get0();
 
         BOOST_CHECK(snp == loaded_snp);

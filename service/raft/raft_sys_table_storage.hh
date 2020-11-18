@@ -42,4 +42,10 @@ public:
     future<> store_log_entries(const std::vector<raft::log_entry_ptr>& entries) override;
     future<> truncate_log(raft::index_t idx) override;
     future<> abort() override;
+
+private:
+
+    // truncate all entries from the persisted log with indices < idx
+    // if idx == 0, do nothing
+    future<> truncate_log_tail(raft::index_t idx);
 };

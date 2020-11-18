@@ -106,8 +106,15 @@ future<raft::snapshot> raft_sys_table_storage::load_snapshot() {
 
 future<> raft_sys_table_storage::store_snapshot(const raft::snapshot& snap, size_t preserve_log_entries) {
     static const auto store_cql = format("INSERT INTO system.{} (group_id, snapshot_id, snapshot) VALUES (?, ?, ?)", db::system_keyspace::RAFT);
-    // TODO: handle `preserve_log_entries` argument
-    return _qp.execute_internal(store_cql, {int64_t(_group_id), snap.id.id, data_value(ser::serialize_to_buffer<bytes>(snap))}).discard_result();
+    return _qp.execute_internal(
+        store_cql,
+        {int64_t(_group_id), snap.id.id, data_value(ser::serialize_to_buffer<bytes>(snap))}
+    ).discard_result().then([this, snp_idx = snap.idx, preserve_log_entries] {
+        if (preserve_log_entries >= snp_idx) {
+            return make_ready_future<>();
+        }
+        return truncate_log_tail(raft::index_t(static_cast<uint64_t>(snp_idx) - static_cast<uint64_t>(preserve_log_entries)));
+    });
 }
 
 future<> raft_sys_table_storage::store_log_entries(const std::vector<raft::log_entry_ptr>& entries) {
@@ -116,11 +123,19 @@ future<> raft_sys_table_storage::store_log_entries(const std::vector<raft::log_e
 }
 
 future<> raft_sys_table_storage::truncate_log(raft::index_t idx) {
-    static const auto truncate_cql = format("DELETE FROM system.{} WHERE group_id = ? AND term >= 0 AND index >= ?", db::system_keyspace::RAFT);
+    static const auto truncate_cql = format("DELETE FROM system.{} WHERE group_id = ? AND \"index\" >= ?", db::system_keyspace::RAFT);
     // TODO: synchronize with store_log_entries
     return _qp.execute_internal(truncate_cql, {int64_t(_group_id), int64_t(idx)}).discard_result();
 }
 
 future<> raft_sys_table_storage::abort() {
     throw std::runtime_error("Not implemented");
+}
+
+future<> raft_sys_table_storage::truncate_log_tail(raft::index_t idx) {
+    if (idx == 0) {
+        return make_ready_future<>();
+    }
+    static const auto truncate_cql = format("DELETE FROM system.{} WHERE group_id = ? AND \"index\" < ?", db::system_keyspace::RAFT);
+    return _qp.execute_internal(truncate_cql, {int64_t(_group_id), int64_t(idx)}).discard_result();
 }
