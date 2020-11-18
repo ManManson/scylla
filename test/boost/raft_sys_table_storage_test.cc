@@ -19,22 +19,77 @@
  * along with Scylla.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <seastar/testing/thread_test_case.hh>
+#include <seastar/testing/test_case.hh>
 
 #include "utils/UUID.hh"
 
 #include "service/raft/raft_sys_table_storage.hh"
 
-SEASTAR_THREAD_TEST_CASE(test_store_term_and_vote) {
-    static constexpr uint64_t group_id = 0;
-    raft_sys_table_storage storage(group_id);
+#include "test/lib/cql_test_env.hh"
+#include "cql3/query_processor.hh"
 
-    raft::term_t vote_term(1);
-    raft::server_id vote_id{.id = utils::make_random_uuid()};
+namespace {
 
-    storage.store_term_and_vote(vote_term, vote_id).get();
-    auto persisted = storage.load_term_and_vote().get();
+bool operator ==(const raft::server_address& lhs, const raft::server_address& rhs) {
+    return lhs.id == rhs.id &&
+        lhs.info == rhs.info;
+}
 
-    BOOST_CHECK_EQUAL(vote_term, persisted.first);
-    BOOST_CHECK_EQUAL(vote_id, persisted.second);
+bool operator ==(const raft::configuration& lhs, const raft::configuration& rhs) {
+    return lhs.previous == rhs.previous &&
+        lhs.current == rhs.current;
+}
+
+bool operator ==(const raft::snapshot& lhs, const raft::snapshot& rhs) {
+    return lhs.idx == rhs.idx &&
+        lhs.term == rhs.term &&
+        lhs.config == rhs.config &&
+        lhs.id == rhs.id;
+}
+
+} //anonymous namespace
+
+SEASTAR_TEST_CASE(test_store_term_and_vote) {
+    return do_with_cql_env_thread([] (cql_test_env& env) {
+        cql3::query_processor& qp = env.local_qp();
+
+        static constexpr uint64_t group_id = 0;
+
+        raft_sys_table_storage storage(qp, group_id);
+
+        raft::term_t vote_term(1);
+        raft::server_id vote_id{.id = utils::make_random_uuid()};
+
+        storage.store_term_and_vote(vote_term, vote_id).get();
+        auto persisted = storage.load_term_and_vote().get();
+
+        BOOST_CHECK_EQUAL(vote_term, persisted.first);
+        BOOST_CHECK_EQUAL(vote_id, persisted.second);
+    });
+}
+
+SEASTAR_TEST_CASE(test_store_snapshot) {
+    return do_with_cql_env_thread([] (cql_test_env& env) {
+        cql3::query_processor& qp = env.local_qp();
+
+        static constexpr uint64_t group_id = 0;
+
+        raft_sys_table_storage storage(qp, group_id);
+
+        raft::term_t snp_term(1);
+        raft::index_t snp_idx(1);
+        raft::configuration snp_cfg({raft::server_id{.id = utils::make_random_uuid()}});
+        raft::snapshot_id snp_id{.id = utils::make_random_uuid()};
+
+        raft::snapshot snp{
+            .idx = snp_idx,
+            .term = snp_term,
+            .config = std::move(snp_cfg),
+            .id = std::move(snp_id)};
+
+        storage.store_snapshot(snp, 0 /*unused at the moment*/).get();
+        raft::snapshot loaded_snp = storage.load_snapshot().get0();
+
+        BOOST_CHECK(snp == loaded_snp);
+    });
 }
