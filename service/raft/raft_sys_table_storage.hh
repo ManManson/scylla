@@ -22,13 +22,16 @@
 
 #include "raft/raft.hh"
 
+#include "cql3/query_processor.hh"
+#include "cql3/statements/modification_statement.hh"
+
 class raft_sys_table_storage : public raft::storage {
     uint64_t _group_id;
+    shared_ptr<cql3::statements::modification_statement> _store_entry_stmt;
+    cql3::query_processor& _qp;
 
 public:
-    explicit raft_sys_table_storage(uint64_t group_id)
-        : _group_id(group_id)
-    {}
+    explicit raft_sys_table_storage(cql3::query_processor& qp, uint64_t group_id);
 
     future<> store_term_and_vote(raft::term_t term, raft::server_id vote) override;
     future<std::pair<raft::term_t, raft::server_id>> load_term_and_vote() override;
