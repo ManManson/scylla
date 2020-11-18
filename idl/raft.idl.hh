@@ -84,4 +84,12 @@ struct append_reply {
     std::variant<raft::append_reply::rejected, raft::append_reply::accepted> result;
 };
 
+struct log_entry {
+    struct dummy {};
+
+    raft::term_t term;
+    raft::index_t idx;
+    std::variant<bytes_ostream, raft::configuration, raft::log_entry::dummy> data;
+};
+
 }
