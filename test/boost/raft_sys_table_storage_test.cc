@@ -30,6 +30,7 @@
 
 namespace {
 
+// these operators provided exclusively for testing purposes
 bool operator ==(const raft::server_address& lhs, const raft::server_address& rhs) {
     return lhs.id == rhs.id &&
         lhs.info == rhs.info;
