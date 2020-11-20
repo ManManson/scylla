@@ -30,6 +30,8 @@ class raft_sys_table_storage : public raft::storage {
     shared_ptr<cql3::statements::modification_statement> _store_entry_stmt;
     cql3::query_processor& _qp;
     service::query_state _dummy_query_state;
+    bool _log_truncation_in_progress = false;
+    condition_variable _log_truncation_finished;
 
 public:
     explicit raft_sys_table_storage(cql3::query_processor& qp, uint64_t group_id);
@@ -46,6 +48,7 @@ public:
 
 private:
 
+    future<> do_store_log_entries(const std::vector<raft::log_entry_ptr>& entries);
     // truncate all entries from the persisted log with indices < idx
     // if idx == 0, do nothing
     future<> truncate_log_tail(raft::index_t idx);

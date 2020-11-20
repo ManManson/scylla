@@ -122,7 +122,7 @@ future<> raft_sys_table_storage::store_snapshot(const raft::snapshot& snap, size
     });
 }
 
-future<> raft_sys_table_storage::store_log_entries(const std::vector<raft::log_entry_ptr>& entries) {
+future<> raft_sys_table_storage::do_store_log_entries(const std::vector<raft::log_entry_ptr>& entries) {
     if (entries.empty()) {
         return make_ready_future<>();
     }
@@ -163,10 +163,22 @@ future<> raft_sys_table_storage::store_log_entries(const std::vector<raft::log_e
         });
 }
 
+future<> raft_sys_table_storage::store_log_entries(const std::vector<raft::log_entry_ptr>& entries) {
+    if (!_log_truncation_in_progress) {
+        return do_store_log_entries(entries);
+    }
+    return _log_truncation_finished.wait([this] { return !_log_truncation_in_progress; }).then([&] {
+        return do_store_log_entries(entries);
+    });
+}
+
 future<> raft_sys_table_storage::truncate_log(raft::index_t idx) {
     static const auto truncate_cql = format("DELETE FROM system.{} WHERE group_id = ? AND \"index\" >= ?", db::system_keyspace::RAFT);
-    // TODO: synchronize with store_log_entries
-    return _qp.execute_internal(truncate_cql, {int64_t(_group_id), int64_t(idx)}).discard_result();
+    _log_truncation_in_progress = true;
+    return _qp.execute_internal(truncate_cql, {int64_t(_group_id), int64_t(idx)}).discard_result().then([&] {
+        _log_truncation_in_progress = false;
+        _log_truncation_finished.broadcast();
+    });
 }
 
 future<> raft_sys_table_storage::abort() {
