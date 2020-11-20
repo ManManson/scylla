@@ -110,6 +110,7 @@ future<raft::snapshot> raft_sys_table_storage::load_snapshot() {
 }
 
 future<> raft_sys_table_storage::store_snapshot(const raft::snapshot& snap, size_t preserve_log_entries) {
+    // TODO: check that snap.idx refers to an already persisted entry
     static const auto store_cql = format("INSERT INTO system.{} (group_id, snapshot_id, snapshot) VALUES (?, ?, ?)", db::system_keyspace::RAFT);
     return _qp.execute_internal(
         store_cql,
