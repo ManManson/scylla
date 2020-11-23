@@ -25,7 +25,7 @@
 #include "cql3/query_processor.hh"
 #include "cql3/statements/modification_statement.hh"
 
-class raft_sys_table_storage : public raft::storage {
+class raft_sys_table_storage : public raft::persistence {
     uint64_t _group_id;
     shared_ptr<cql3::statements::modification_statement> _store_entry_stmt;
     cql3::query_processor& _qp;
