@@ -122,4 +122,21 @@ struct log_entry {
     std::variant<bytes_ostream, raft::configuration, raft::log_entry::dummy> data;
 };
 
+struct append_request_send {
+    // The leader's term.
+    raft::term_t current_term;
+    // So that follower can redirect clients
+    // In practice we do not need it since we should know sender's id anyway.
+    raft::server_id leader_id;
+    // Index of the log entry immediately preceding new ones
+    raft::index_t prev_log_idx;
+    // Term of prev_log_idx entry.
+    raft::term_t prev_log_term;
+    // The leader's commit_idx.
+    raft::index_t leader_commit_idx;
+    // Log entries to store (empty vector for heartbeat; may send more
+    // than one entry for efficiency).
+    std::vector<lw_shared_ptr<const raft::log_entry>> entries;
+};
+
 }
