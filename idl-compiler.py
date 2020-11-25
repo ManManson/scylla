@@ -93,12 +93,14 @@ def print_cw(f):
 #pragma once
  """)
 
+
 class BasicType:
-    def __init__(self, name):
+    def __init__(self, name, is_const=False):
         self.name = name
+        self.is_const = is_const
 
     def __str__(self):
-        return f"BasicType(name={self.name})"
+        return f"BasicType(name={self.name}, is_const={self.is_const})"
 
     def __repr__(self):
         return self.__str__()
@@ -228,6 +230,24 @@ def template_type_parse_action(tokens):
     return TemplateType(name=tokens['template_name'], template_parameters=tokens["template_parameters"].asList())
 
 
+# Will be used after parsing is complete to determine which local types
+# have usages with `const` specifiers: depending on that we should generate
+# a serializer specialization for `const` type too.
+types_with_const_appearances = set()
+
+
+def type_parse_action(tokens):
+    if len(tokens) == 1:
+        return tokens[0]
+    # If we have two tokens in type parse action then
+    # it's because we have BasicType production with `const`
+    # NOTE: template types cannot have `const` modifier at the moment,
+    # this wouldn't parse.
+    tokens[1].is_const = True
+    types_with_const_appearances.add(tokens[1].name)
+    return tokens[1]
+
+
 def enum_value_parse_action(tokens):
     initializer = None
     if len(tokens) == 2:
@@ -293,6 +313,7 @@ def parse_file(file_name):
     template = pp.Keyword('template')
     final = pp.Keyword('final')
     stub = pp.Keyword('stub')
+    const = pp.Keyword('const')
     with_colon = pp.Word(pp.alphanums + "_" + ":")
 
     btype = with_colon.copy()
@@ -303,7 +324,8 @@ def parse_file(file_name):
     tmpl = with_colon("template_name") + langle.suppress() + pp.Group(pp.delimitedList(type))("template_parameters") + rangle.suppress()
     tmpl.setParseAction(template_type_parse_action)
 
-    type <<= tmpl | btype
+    type <<= tmpl | (pp.Optional(const) + btype)
+    type.setParseAction(type_parse_action)
 
     enum_lit = pp.Keyword('enum')
     enum_class = pp.Group(enum_lit + cls)
@@ -392,6 +414,14 @@ struct serializer<$name> {
   static void skip(Input& buf);
 };
 """).substitute({'name': name, 'tmp_param': template_param}))
+
+    if name in types_with_const_appearances:
+        fprintln(hout, f"""
+template <{template_param}>
+struct serializer<const {name}> : public serializer<{name}>
+{{}};
+""")
+
     if config.ns != '':
         fprintln(hout, "}")
 
@@ -422,7 +452,7 @@ def join_template(template_params):
 
 def param_type(t):
     if isinstance(t, BasicType):
-        return t.name
+        return 'const ' + t.name if t.is_const else t.name
     elif isinstance(t, TemplateType):
         return t.name + join_template(t.template_parameters)
 
