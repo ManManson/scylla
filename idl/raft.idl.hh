@@ -100,6 +100,8 @@ struct append_reply {
         // in case follower's log is longer and appended entries match).
         raft::index_t last_new_idx;
     };
+    // Current term, for leader to update itself.
+    raft::term_t current_term;
     // Contains an index of the last commited entry on the follower
     // It is used by a leader to know if a follower is behind and issuing
     // empty append entry with updates commit_idx if it is
