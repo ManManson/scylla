@@ -91,7 +91,6 @@ def print_cw(f):
 #pragma once
  """)
 
-
 def parse_file(file_name):
 
     number = pp.Word(pp.nums)
@@ -115,18 +114,20 @@ def parse_file(file_name):
     template = pp.Keyword('template')
     final = pp.Keyword('final')("final")
     stub = pp.Keyword('stub')("stub")
+    const = pp.Keyword('const')("const")
     with_colon = pp.Word(pp.alphanums + "_" + ":")
     btype = with_colon
     type = pp.Forward()
     nestedParens = pp.nestedExpr('<', '>')
 
     tmpl = pp.Group(btype("template_name") + langle.suppress() + pp.Group(pp.delimitedList(type)) + rangle.suppress())
-    type << (tmpl | btype)
+    # TODO: also support `const template_name<T1, T2, ...>` syntax
+    type <<= tmpl | (pp.Optional(const) + btype)
     enum_lit = pp.Keyword('enum')
     enum_class = pp.Group(enum_lit + cls)
     ns = pp.Keyword("namespace")
 
-    enum_init = equals.suppress() + pp.Optional(mins) + number
+    enum_init = equals + pp.Optional(mins) + number
     enum_value = pp.Group(identifier + pp.Optional(enum_init))
     enum_values = pp.Group(lbrace + pp.delimitedList(enum_value) + pp.Optional(comma) + rbrace)
     content = pp.Forward()
@@ -218,7 +219,21 @@ $name serializer<$name>::read(Input& buf) {
 
 
 def join_template(lst):
-    return "<" + ", ".join([param_type(l) for l in lst]) + ">"
+    params = []
+    has_const = False
+
+    # Detect `const` specifier and prepend it to the type name for the template parameter
+    for param in lst:
+        if param == 'const':
+            has_const = True
+            continue
+        if has_const:
+            params.append('const ' + param_type(param))
+            has_const = False
+            continue
+        params.append(param_type(param))
+
+    return "<" + ", ".join([p for p in params]) + ">"
 
 
 def param_type(lst):
@@ -226,8 +241,16 @@ def param_type(lst):
         return lst
     if len(lst) == 1:
         return lst[0]
-    return lst[0] + join_template(lst[1])
-
+    # Detect `const` sepcifier and prepend it to the type name for the basic type name or template parameter
+    # TODO: also need to patch `is_*` family of functions accordingly
+    # to support `const` members in `[[writable]]` classes
+    if len(lst) == 2:
+        if lst[0] == 'const':
+            return 'const' + lst[1]
+        else:
+            return lst[0] + join_template(lst[1])
+    # len(lst) == 3
+    return 'const ' + lst[1] + join_template(lst[2])
 
 def flat_template(lst):
     return ", ".join([param_type(l) for l in lst])
