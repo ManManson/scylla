@@ -375,7 +375,7 @@ def declare_class(hout, name, ns_open, ns_close):
     fprintln(hout, "\n", clas_def)
 
 
-def declear_methods(hout, name, template_param=""):
+def declare_methods(hout, name, template_param=""):
     if config.ns != '':
         fprintln(hout, "namespace ", config.ns, " {")
     fprintln(hout, f"""
@@ -400,7 +400,7 @@ def handle_enum(enum, hout, cout, namespaces, parent_template_param=[]):
     temp_def = ", ".join(map(lambda a: a.typename + " " + a.name, parent_template_param)) if parent_template_param else ""
     template = "template <" + temp_def + ">" if temp_def else ""
     name = enum.name if ns == "" else ns + "::" + enum.name
-    declear_methods(hout, name, temp_def)
+    declare_methods(hout, name, temp_def)
     fprintln(cout, f"""
 {template}
 template <typename Output>
@@ -610,7 +610,7 @@ def add_param_writer_basic_type(name, base_state, typ, var_type="", var_index=No
     if isinstance(var_index, Number):
         var_index = "uint32_t(" + str(var_index) + ")"
     create_variant_state = f"auto state = state_of_{base_state}__{name}<Output> {{ start_frame(_out), std::move(_state) }};" if var_index and root_node else ""
-    set_varient_index = f"serialize(_out, {var_index});\n" if var_index is not None else ""
+    set_variant_index = f"serialize(_out, {var_index});\n" if var_index is not None else ""
     set_command = ("_state.f.end(_out);" if not root_node else "state.f.end(_out);") if var_type != "" else ""
     return_command = "{ _out, std::move(_state._parent) }" if var_type != "" and not root_node else "{ _out, std::move(_state) }"
 
@@ -624,7 +624,7 @@ def add_param_writer_basic_type(name, base_state, typ, var_type="", var_index=No
     writer = reindent(4, """
         after_{base_state}__{name}<Output> write_{name}{var_type}({typename} t) && {{
             {create_variant_state}
-            {set_varient_index}
+            {set_variant_index}
             serialize(_out, t);
             {set_command}
             return {return_command};
@@ -634,7 +634,7 @@ def add_param_writer_basic_type(name, base_state, typ, var_type="", var_index=No
         template<typename FragmentedBuffer>
         requires FragmentRange<FragmentedBuffer>
         after_{base_state}__{name}<Output> write_fragmented_{name}{var_type}(FragmentedBuffer&& fragments) && {{
-            {set_varient_index}
+            {set_variant_index}
             serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
             {set_command}
             return {return_command};
@@ -647,12 +647,12 @@ def add_param_writer_object(name, base_state, typ, var_type="", var_index=None, 
     if isinstance(var_index, Number):
         var_index = "uint32_t(" + str(var_index) + ")"
     create_variant_state = f"auto state = state_of_{base_state}__{name}<Output> {{ start_frame(_out), std::move(_state) }};" if var_index and root_node else ""
-    set_varient_index = f"serialize(_out, {var_index});\n" if var_index is not None else ""
+    set_variant_index = f"serialize(_out, {var_index});\n" if var_index is not None else ""
     state = "std::move(_state)" if not var_index or not root_node else "std::move(state)"
     ret = reindent(4, """
         {base_state}__{name}{var_type1}<Output> start_{name}{var_type}() && {{
             {create_variant_state}
-            {set_varient_index}
+            {set_variant_index}
             return {{ _out, {state} }};
         }}
     """).format(**locals())
@@ -665,7 +665,7 @@ def add_param_writer_object(name, base_state, typ, var_type="", var_index=None, 
         ret += reindent(4, """
             template<typename Serializer>
             after_{base_state}__{name}<Output> {name}{var_type}(Serializer&& f) && {{
-                {set_varient_index}
+                {set_variant_index}
                 f(writer_of_{typename}<Output>(_out));
                 {set_command}
                 return {return_command};
@@ -1103,7 +1103,7 @@ def handle_class(cls, hout, cout, namespaces=[], parent_template_param=[]):
             handle_class(member, hout, cout, namespaces + [cls.name + template_class_param], parent_template_param + template_param_list)
         elif isinstance(member, EnumDef):
             handle_enum(member, hout, cout, namespaces + [cls.name + template_class_param], parent_template_param + template_param_list)
-    declear_methods(hout, name + template_class_param, temp_def)
+    declare_methods(hout, name + template_class_param, temp_def)
     is_final = cls.final
 
     fprintln(cout, f"""
