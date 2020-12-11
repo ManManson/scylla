@@ -83,13 +83,16 @@ def print_cw(f):
  """)
 
 
+###
+### AST Nodes
+###
 class BasicType:
     def __init__(self, name, is_const=False):
         self.name = name
         self.is_const = is_const
 
     def __str__(self):
-        return f"BasicType(name={self.name}, is_const={self.is_const})"
+        return f"<BasicType(name={self.name}, is_const={self.is_const})>"
 
     def __repr__(self):
         return self.__str__()
@@ -101,7 +104,7 @@ class TemplateType:
         self.template_parameters = template_parameters
 
     def __str__(self):
-        return f"TemplateType(name={self.name}, args={pformat(self.template_parameters)}"
+        return f"<TemplateType(name={self.name}, args={pformat(self.template_parameters)}>"
 
     def __repr__(self):
         return self.__str__()
@@ -113,7 +116,7 @@ class EnumValue:
         self.initializer = initializer
 
     def __str__(self):
-        return f"EnumValue(name={self.name}, initializer={self.initializer})"
+        return f"<EnumValue(name={self.name}, initializer={self.initializer})>"
 
     def __repr__(self):
         return self.__str__()
@@ -126,7 +129,7 @@ class EnumDef:
         self.members = members
 
     def __str__(self):
-        return f"EnumDef(name={self.name}, underlying_type={self.underlying_type}, members={pformat(self.members)})";
+        return f"<EnumDef(name={self.name}, underlying_type={self.underlying_type}, members={pformat(self.members)})>";
 
     def __repr__(self):
         return self.__str__()
@@ -151,7 +154,7 @@ class DataClassMember:
         self.default_value = default_value
 
     def __str__(self):
-        return f"DataClassMember(type={self.type}, name={self.name}, attribute={self.attribute}, default_value={self.default_value})"
+        return f"<DataClassMember(type={self.type}, name={self.name}, attribute={self.attribute}, default_value={self.default_value})>"
 
     def __repr__(self):
         return self.__str__()
@@ -165,7 +168,7 @@ class FunctionClassMember:
         self.default_value = default_value
 
     def __str__(self):
-        return f"FunctionClassMember(type={self.type}, name={self.name}, attribute={self.attribute}, default_value={self.default_value})"
+        return f"<FunctionClassMember(type={self.type}, name={self.name}, attribute={self.attribute}, default_value={self.default_value})>"
 
     def __repr__(self):
         return self.__str__()
@@ -177,7 +180,7 @@ class ClassTemplateParam:
         self.name = name
 
     def __str__(self):
-        return f"ClassTemplateParam(typename={self.typename}, name={self.name})"
+        return f"<ClassTemplateParam(typename={self.typename}, name={self.name})>"
 
     def __repr__(self):
         return self.__str__()
@@ -193,7 +196,7 @@ class ClassDef:
         self.template_params = template_params
 
     def __str__(self):
-        return f"ClassDef(name={self.name}, members={pformat(self.members)}, final={self.final}, stub={self.stub}, attribute={self.attribute}, template_params={self.template_params})"
+        return f"<ClassDef(name={self.name}, members={pformat(self.members)}, final={self.final}, stub={self.stub}, attribute={self.attribute}, template_params={self.template_params})>"
 
     def __repr__(self):
         return self.__str__()
@@ -205,12 +208,14 @@ class NamespaceDef:
         self.members = members
 
     def __str__(self):
-        return f"NamespaceDef(name={self.name}, members={pformat(self.members)})"
+        return f"<NamespaceDef(name={self.name}, members={pformat(self.members)})>"
 
     def __repr__(self):
         return self.__str__()
 
-
+###
+### Parse actions, which transform raw tokens into structured representation: specialized AST nodes
+###
 def basic_type_parse_action(tokens):
     return BasicType(name=tokens[0])
 
