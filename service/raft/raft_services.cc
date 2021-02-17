@@ -30,6 +30,7 @@
 #include "gms/gossiper.hh"
 
 #include <seastar/core/smp.hh>
+#include <seastar/core/coroutine.hh>
 
 raft_services::raft_services(netw::messaging_service& ms, gms::gossiper& gs, cql3::query_processor& qp)
     : _ms(ms), _gossiper(gs), _qp(qp), _fd(make_shared<raft_gossip_failure_detector>(gs, *this))
@@ -40,15 +41,15 @@ void raft_services::init_rpc_verbs() {
             const rpc::client_info& cinfo,
             uint64_t group_id, raft::server_id from, raft::server_id dst, auto handler) {
         return container().invoke_on(shard_for_group(group_id),
-                [addr = netw::messaging_service::get_source(cinfo).addr, from, dst, handler] (raft_services& self) mutable {
+                [addr = netw::messaging_service::get_source(cinfo).addr, from, dst, handler] (raft_services& self) mutable -> future<> {
             // Update the address mappings for the rpc module
             // in case the sender is encountered for the first time
             auto& rpc = self.get_rpc(dst);
             // The address learnt from a probably unknown server is transient
             // and thus should eventually expire
-            self.update_address_mapping(from, std::move(addr), true);
+            co_await self.update_address_mapping(from, std::move(addr), true);
             // Execute the actual message handling code
-            return handler(rpc);
+            co_return co_await handler(rpc);
         });
     };
 
@@ -160,17 +161,17 @@ gms::inet_address raft_services::get_inet_address(raft::server_id id) const {
     return *it;
 }
 
-void raft_services::update_address_mapping(raft::server_id id, gms::inet_address addr, bool expiring) {
+future<> raft_services::update_address_mapping(raft::server_id id, gms::inet_address addr, bool expiring) {
     auto mappings_addr = _srv_address_mappings.find(id);
     if (!mappings_addr) {
-        _srv_address_mappings.set(std::move(id), std::move(addr), expiring);
-        return;
+        return _srv_address_mappings.set(std::move(id), std::move(addr), expiring);
     }
     if (mappings_addr != addr) {
         throw std::runtime_error(
             format("update_address_mapping: expected to get inet_address {} for raft server id {} (got {})",
                 mappings_addr, id, addr));
     }
+    return make_ready_future<>();
 }
 
 void raft_services::remove_address_mapping(raft::server_id id) {

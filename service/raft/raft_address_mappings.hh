@@ -33,6 +33,6 @@ public:
     raft_address_mappings();
 
     std::optional<gms::inet_address> find(raft::server_id id) const;
-    void set(raft::server_id id, gms::inet_address addr, bool expiring);
+    future<> set(raft::server_id id, gms::inet_address addr, bool expiring);
     void erase(raft::server_id id);
 };

@@ -292,7 +292,7 @@ public:
         net[id]->_client->request_vote_reply(_id, std::move(vote_reply));
         return make_ready_future<>();
     }
-    virtual void add_server(raft::server_id id, bytes node_info, bool expiring) {}
+    virtual future<> add_server(raft::server_id id, bytes node_info, bool expiring) { return make_ready_future<>(); }
     virtual void remove_server(raft::server_id id) {}
     virtual future<> abort() { return make_ready_future<>(); }
 };

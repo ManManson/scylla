@@ -368,7 +368,7 @@ public:
 
     // When a new server is learn this function is called with the
     // info about the server.
-    virtual void add_server(server_id id, server_info info, bool expiring) = 0;
+    virtual future<> add_server(server_id id, server_info info, bool expiring) = 0;
 
     // When a server is removed from local config this call is
     // executed.

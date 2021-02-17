@@ -51,12 +51,12 @@ std::optional<gms::inet_address> raft_address_mappings::find(raft::server_id id)
     return std::nullopt;
 }
 
-void raft_address_mappings::set(raft::server_id id, gms::inet_address addr, bool expiring) {
+future<> raft_address_mappings::set(raft::server_id id, gms::inet_address addr, bool expiring) {
     if (!expiring) {
         _regular_mappings[id] = addr;
-        return;
+        co_return;
     }
-    (void)_transient_mappings.get_ptr(id, [addr = std::move(addr), expiring] (raft::server_id) mutable {
+    co_await _transient_mappings.get_ptr(id, [addr = std::move(addr), expiring] (raft::server_id) mutable {
         return make_ready_future<gms::inet_address>(std::move(addr));
     }).discard_result();
 }

@@ -82,7 +82,7 @@ public:
     // Update inet_address mapping for a raft server with a given id.
     // In case a mapping exists for a given id, it should be equal to the supplied `addr`
     // otherwise the function will throw.
-    void update_address_mapping(raft::server_id id, gms::inet_address addr, bool expiring);
+    future<> update_address_mapping(raft::server_id id, gms::inet_address addr, bool expiring);
     // Remove inet_address mapping for a raft server
     void remove_address_mapping(raft::server_id);
 };
