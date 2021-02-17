@@ -44,7 +44,9 @@ void raft_services::init_rpc_verbs() {
             // Update the address mappings for the rpc module
             // in case the sender is encountered for the first time
             auto& rpc = self.get_rpc(dst);
-            self.update_address_mapping(from, std::move(addr));
+            // The address learnt from a probably unknown server is transient
+            // and thus should eventually expire
+            self.update_address_mapping(from, std::move(addr), true);
             // Execute the actual message handling code
             return handler(rpc);
         });
@@ -151,26 +153,26 @@ unsigned raft_services::shard_for_group(uint64_t group_id) const {
 }
 
 gms::inet_address raft_services::get_inet_address(raft::server_id id) const {
-    auto it = _server_addresses.find(id);
-    if (it == _server_addresses.end()) {
+    auto it = _srv_address_mappings.find(id);
+    if (!it) {
         throw std::runtime_error(format("Destination raft server not found with id {}", id));
     }
-    return it->second;
+    return *it;
 }
 
-void raft_services::update_address_mapping(raft::server_id id, gms::inet_address addr) {
-    auto addr_it = _server_addresses.find(id);
-    if (addr_it == _server_addresses.end()) {
-        _server_addresses[id] = addr;
+void raft_services::update_address_mapping(raft::server_id id, gms::inet_address addr, bool expiring) {
+    auto mappings_addr = _srv_address_mappings.find(id);
+    if (!mappings_addr) {
+        _srv_address_mappings.set(std::move(id), std::move(addr), expiring);
         return;
     }
-    if (addr_it->second != addr) {
+    if (mappings_addr != addr) {
         throw std::runtime_error(
             format("update_address_mapping: expected to get inet_address {} for raft server id {} (got {})",
-                addr_it->second, id, addr));
+                mappings_addr, id, addr));
     }
 }
 
 void raft_services::remove_address_mapping(raft::server_id id) {
-    _server_addresses.erase(id);
+    _srv_address_mappings.erase(id);
 }

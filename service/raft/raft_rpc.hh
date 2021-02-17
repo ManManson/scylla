@@ -43,7 +43,7 @@ public:
     future<> send_append_entries_reply(raft::server_id id, const raft::append_reply& reply) override;
     future<> send_vote_request(raft::server_id id, const raft::vote_request& vote_request) override;
     future<> send_vote_reply(raft::server_id id, const raft::vote_reply& vote_reply) override;
-    void add_server(raft::server_id id, raft::server_info info) override;
+    void add_server(raft::server_id id, raft::server_info info, bool expiring) override;
     void remove_server(raft::server_id id) override;
     future<> abort() override;
 

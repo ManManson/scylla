@@ -56,13 +56,13 @@ future<> raft_rpc::send_vote_reply(raft::server_id id, const raft::vote_reply& v
         netw::msg_addr(_raft_services.get_inet_address(id)), db::no_timeout, _group_id, _server_id, id, vote_reply);
 }
 
-void raft_rpc::add_server(raft::server_id id, raft::server_info info) {
+void raft_rpc::add_server(raft::server_id id, raft::server_info info, bool expiring) {
     // Parse gms::inet_address from server_info
     auto in = ser::as_input_stream(bytes_view(info));
     // Entries explicitly managed via `rpc::add_server` and `rpc::remove_server` should never expire
     // while entries learnt upon receiving an rpc message should be expirable.
     // TODO: support expiration policies for `raft_services::update_address_mapping`
-    _raft_services.update_address_mapping(id, ser::deserialize(in, boost::type<gms::inet_address>()));
+    _raft_services.update_address_mapping(id, ser::deserialize(in, boost::type<gms::inet_address>()), expiring);
 }
 
 void raft_rpc::remove_server(raft::server_id id) {
