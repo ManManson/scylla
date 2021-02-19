@@ -541,6 +541,12 @@ future<> server_impl::set_configuration(server_address_set c_new) {
     }
     _stats.add_config++;
     co_return co_await add_entry_internal(raft::configuration{std::move(c_new)}, wait_type::committed);
+    for (auto&& addr: joining) {
+        co_await _rpc->add_server(std::move(addr.id), std::move(addr.info), true);
+    }
+    for (const auto& addr: leaving) {
+        _rpc->remove_server(addr.id);
+    }
 }
 
 void server_impl::register_metrics() {
