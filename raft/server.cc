@@ -205,6 +205,10 @@ future<> server_impl::start() {
     if (snp_id) {
         co_await _state_machine->load_snapshot(snp_id);
         _last_loaded_snapshot_id = snp_id;
+        // Update rpc instance with configuration from the loaded snapshot
+        for (const server_address& addr : snapshot.config.current) {
+            co_await _rpc->add_server(addr.id, addr.info, false);
+        }
     }
 
     // start fiber to persist entries added to in-memory log
