@@ -125,13 +125,13 @@ struct configuration {
         configuration_diff diff;
         // joining
         for (const auto& s : c_new) {
-            if (current.count(s) == 0) {
+            if (!current.contains(s)) {
                 diff.joining.insert(s);
             }
         }
         // leaving
         for (const auto& s : current) {
-            if (c_new.count(s) == 0) {
+            if (!c_new.contains(s)) {
                 diff.leaving.insert(s);
             }
         }
