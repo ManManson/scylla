@@ -138,6 +138,25 @@ struct configuration {
         return diff;
     }
 
+    // compute self-diff between the previous and current configurations
+    // used to compute set of endpoint addresses to update rpc instance 
+    configuration_diff diff() const {
+        configuration_diff diff;
+        // joining
+        for (const auto& s : current) {
+            if (!previous.contains(s)) {
+                diff.joining.insert(s);
+            }
+        }
+        // leaving
+        for (const auto& s : previous) {
+            if (!current.contains(s)) {
+                diff.leaving.insert(s);
+            }
+        }
+        return diff;
+    }
+
     // Enter a joint configuration given a new set of servers.
     void enter_joint(server_address_set c_new) {
         // @todo: validate that c_old & c_new are compatible.

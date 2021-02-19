@@ -460,11 +460,31 @@ future<> server_impl::applier_fiber() {
 
             index_t last_idx = opt_batch->back()->idx;
 
-            boost::range::copy(
-                    *opt_batch |
-                    boost::adaptors::filtered([] (log_entry_ptr& entry) { return std::holds_alternative<command>(entry->data); }) |
-                    boost::adaptors::transformed([] (log_entry_ptr& entry) { return std::cref(std::get<command>(entry->data)); }),
-                    std::back_inserter(commands));
+            for (const log_entry_ptr& entry : *opt_batch) {
+                if (std::holds_alternative<command>(entry->data)) {
+                    commands.emplace_back(std::cref(std::get<command>(entry->data)));
+                } else if (std::holds_alternative<raft::configuration>(entry->data)) {
+                    const raft::configuration& cfg = std::get<raft::configuration>(entry->data);
+                    // process only joint configuration entries, no need to process final target configuration
+                    if (cfg.is_joint()) {
+                        // removed servers should not be removed immediately from rpc since
+                        // there still may be entries that should be sent to a server being removed
+                        // from the committed configuration.
+                        // Mark them as transient so that they will expire soon after the target configuration
+                        // is committed.
+                        configuration_diff diff = cfg.diff();
+                        for (const server_address& addr: diff.joining) {
+                            co_await _rpc->add_server(addr.id, addr.info, false);
+                        }
+                        for (const server_address& addr: diff.leaving) {
+                            _rpc->remove_server(addr.id);
+                            // mark connection info as expiring since it should not be removed immediately
+                            // for the reasons described above
+                            co_await _rpc->add_server(addr.id, addr.info, true);
+                        }
+                    }
+                }
+            }
 
             auto size = commands.size();
             co_await _state_machine->apply(std::move(commands));
