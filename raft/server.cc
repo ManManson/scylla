@@ -173,6 +173,7 @@ private:
     seastar::metrics::metric_groups _metrics;
 
     future<> add_rpc_server_mappings(const server_address_set& servers, bool transient);
+    future<std::vector<command_cref>> prepare_apply_commands(const std::vector<log_entry_ptr>& log_entries);
 
     friend std::ostream& operator<<(std::ostream& os, const server_impl& s);
 };
@@ -445,6 +446,37 @@ future<> server_impl::apply_snapshot(server_id from, install_snapshot snp) {
     });
 }
 
+future<std::vector<command_cref>> server_impl::prepare_apply_commands(const std::vector<log_entry_ptr>& log_entries) {
+    std::vector<command_cref> res;
+    res.reserve(log_entries.size());
+    for (const log_entry_ptr& entry : log_entries) {
+        if (std::holds_alternative<command>(entry->data)) {
+            res.emplace_back(std::cref(std::get<command>(entry->data)));
+        } else if (std::holds_alternative<raft::configuration>(entry->data)) {
+            const raft::configuration& cfg = std::get<raft::configuration>(entry->data);
+            // process only joint configuration entries, no need to process final target configuration
+            // since it will be immediately applied on the leader anyway
+            if (!cfg.is_joint()) {
+                continue;
+            }
+            // removed servers should not be removed immediately from rpc since
+            // there still may be entries that should be sent to a server being removed
+            // from the committed configuration.
+            // Mark them as transient so that they will expire soon after the target configuration
+            // is committed.
+            configuration_diff diff = cfg.diff();
+            co_await add_rpc_server_mappings(diff.joining, false);
+            for (const server_address& addr: diff.leaving) {
+                _rpc->remove_server(addr.id);
+            }
+            // mark departing servers as expiring since it should not be removed immediately
+            // for the reasons described above
+            co_await add_rpc_server_mappings(diff.leaving, true);
+        }
+    }
+    co_return res;
+}
+
 future<> server_impl::applier_fiber() {
     logger.trace("applier_fiber start");
     size_t applied_since_snapshot = 0;
@@ -459,34 +491,8 @@ future<> server_impl::applier_fiber() {
 
             applied_since_snapshot += opt_batch->size();
 
-            std::vector<command_cref> commands;
-            commands.reserve(opt_batch->size());
-
+            std::vector<command_cref> commands = co_await prepare_apply_commands(*opt_batch);
             index_t last_idx = opt_batch->back()->idx;
-
-            for (const log_entry_ptr& entry : *opt_batch) {
-                if (std::holds_alternative<command>(entry->data)) {
-                    commands.emplace_back(std::cref(std::get<command>(entry->data)));
-                } else if (std::holds_alternative<raft::configuration>(entry->data)) {
-                    const raft::configuration& cfg = std::get<raft::configuration>(entry->data);
-                    // process only joint configuration entries, no need to process final target configuration
-                    if (cfg.is_joint()) {
-                        // removed servers should not be removed immediately from rpc since
-                        // there still may be entries that should be sent to a server being removed
-                        // from the committed configuration.
-                        // Mark them as transient so that they will expire soon after the target configuration
-                        // is committed.
-                        configuration_diff diff = cfg.diff();
-                        co_await add_rpc_server_mappings(diff.joining, false);
-                        for (const server_address& addr: diff.leaving) {
-                            _rpc->remove_server(addr.id);
-                        }
-                        // mark departing servers as expiring since it should not be removed immediately
-                        // for the reasons described above
-                        co_await add_rpc_server_mappings(diff.leaving, true);
-                    }
-                }
-            }
 
             auto size = commands.size();
             co_await _state_machine->apply(std::move(commands));
