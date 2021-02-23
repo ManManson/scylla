@@ -206,9 +206,12 @@ future<> server_impl::start() {
         co_await _state_machine->load_snapshot(snp_id);
         _last_loaded_snapshot_id = snp_id;
         // Update rpc instance with configuration from the loaded snapshot
+        std::vector<future<>> joining_srv_futs;
+        joining_srv_futs.reserve(snapshot.config.current.size());
         for (const server_address& addr : snapshot.config.current) {
-            co_await _rpc->add_server(addr.id, addr.info, false);
+            joining_srv_futs.emplace_back(_rpc->add_server(addr.id, addr.info, false));
         }
+        co_await when_all_succeed(joining_srv_futs.begin(), joining_srv_futs.end());
     }
 
     // start fiber to persist entries added to in-memory log
@@ -477,15 +480,19 @@ future<> server_impl::applier_fiber() {
                         // Mark them as transient so that they will expire soon after the target configuration
                         // is committed.
                         configuration_diff diff = cfg.diff();
+
+                        std::vector<future<>> joining_srv_futs;
+                        joining_srv_futs.reserve(diff.joining.size());
                         for (const server_address& addr: diff.joining) {
-                            co_await _rpc->add_server(addr.id, addr.info, false);
+                            joining_srv_futs.emplace_back(_rpc->add_server(addr.id, addr.info, false));
                         }
                         for (const server_address& addr: diff.leaving) {
                             _rpc->remove_server(addr.id);
                             // mark connection info as expiring since it should not be removed immediately
                             // for the reasons described above
-                            co_await _rpc->add_server(addr.id, addr.info, true);
+                            joining_srv_futs.emplace_back(_rpc->add_server(addr.id, addr.info, true));
                         }
+                        co_await when_all_succeed(joining_srv_futs.begin(), joining_srv_futs.end());
                     }
                 }
             }
@@ -565,9 +572,12 @@ future<> server_impl::set_configuration(server_address_set c_new) {
     }
     _stats.add_config++;
     co_return co_await add_entry_internal(raft::configuration{std::move(c_new)}, wait_type::committed);
+    std::vector<future<>> joining_srv_futs;
+    joining_srv_futs.reserve(joining.size());
     for (auto&& addr: joining) {
-        co_await _rpc->add_server(std::move(addr.id), std::move(addr.info), true);
+        joining_srv_futs.emplace_back(_rpc->add_server(std::move(addr.id), std::move(addr.info), true));
     }
+    co_await when_all_succeed(joining_srv_futs.begin(), joining_srv_futs.end());
     for (const auto& addr: leaving) {
         _rpc->remove_server(addr.id);
     }
