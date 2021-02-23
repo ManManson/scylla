@@ -118,19 +118,31 @@ struct configuration {
     // Check the proposed configuration and compute a diff
     // between it and the current one.
     configuration_diff diff(const server_address_set& c_new) const {
+        return diff(current, c_new);
+    }
 
+    // Compute self-diff between the previous and current configurations.
+    // Used to obtain a set of endpoint addresses to update rpc instance on a
+    // configuration change.
+    configuration_diff diff() const {
+        return diff(previous, current);
+    }
+
+private:
+
+    static configuration_diff diff(const server_address_set& c_old, const server_address_set& c_new) {
         if (c_new.empty()) {
             throw std::invalid_argument("Attempt to transition to an empty Raft configuration");
         }
         configuration_diff diff;
         // joining
         for (const auto& s : c_new) {
-            if (!current.contains(s)) {
+            if (!c_old.contains(s)) {
                 diff.joining.insert(s);
             }
         }
         // leaving
-        for (const auto& s : current) {
+        for (const auto& s : c_old) {
             if (!c_new.contains(s)) {
                 diff.leaving.insert(s);
             }
@@ -138,24 +150,7 @@ struct configuration {
         return diff;
     }
 
-    // compute self-diff between the previous and current configurations
-    // used to compute set of endpoint addresses to update rpc instance 
-    configuration_diff diff() const {
-        configuration_diff diff;
-        // joining
-        for (const auto& s : current) {
-            if (!previous.contains(s)) {
-                diff.joining.insert(s);
-            }
-        }
-        // leaving
-        for (const auto& s : previous) {
-            if (!current.contains(s)) {
-                diff.leaving.insert(s);
-            }
-        }
-        return diff;
-    }
+public:
 
     // Enter a joint configuration given a new set of servers.
     void enter_joint(server_address_set c_new) {
