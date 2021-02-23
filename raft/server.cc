@@ -172,7 +172,18 @@ private:
     void register_metrics();
     seastar::metrics::metric_groups _metrics;
 
+    // Update rpc module with server address mappings from the provided server address list
     future<> add_rpc_server_mappings(const server_address_set& servers, bool transient);
+    // Get entries to be applied to the state machine.
+    //
+    // Filters out configuration entries, but for each joint conf entry
+    // rpc server address mappings are updated accordingly, i.e.
+    // mappings for the current configuration are added and members of the previous
+    // configuration are marked as expiring.
+    //
+    // This is needed to delay address mappings destruction until all
+    // outstanding requests to deparing servers are complete after the
+    // configuration change is done.
     future<std::vector<command_cref>> prepare_apply_commands(const std::vector<log_entry_ptr>& log_entries);
 
     friend std::ostream& operator<<(std::ostream& os, const server_impl& s);
@@ -209,6 +220,7 @@ future<> server_impl::start() {
         co_await _state_machine->load_snapshot(snp_id);
         _last_loaded_snapshot_id = snp_id;
         // Update rpc instance with configuration from the loaded snapshot
+        // This configuration should not expire
         co_await add_rpc_server_mappings(snapshot.config.current, false);
     }
 
@@ -491,6 +503,8 @@ future<> server_impl::applier_fiber() {
 
             applied_since_snapshot += opt_batch->size();
 
+            // filter configuration entries from the list of commands to apply, but
+            // update rpc server mappings for every joint configuration entry
             std::vector<command_cref> commands = co_await prepare_apply_commands(*opt_batch);
             index_t last_idx = opt_batch->back()->idx;
 
@@ -569,6 +583,7 @@ future<> server_impl::set_configuration(server_address_set c_new) {
     }
     _stats.add_config++;
     co_await add_entry_internal(raft::configuration{std::move(c_new)}, wait_type::committed);
+    // add transient server mappings to rpc module and remove mappings the leaving servers
     co_await add_rpc_server_mappings(joining, true);
     for (const auto& addr: leaving) {
         _rpc->remove_server(addr.id);

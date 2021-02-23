@@ -130,6 +130,7 @@ struct configuration {
 
 private:
 
+    // Compute the difference between some *old* and *new* configurations.
     static configuration_diff diff(const server_address_set& c_old, const server_address_set& c_new) {
         if (c_new.empty()) {
             throw std::invalid_argument("Attempt to transition to an empty Raft configuration");
