@@ -283,6 +283,12 @@ fsm_output fsm::get_output() {
     // to not lose messages in case arrays population throws
     std::swap(output.messages, _messages);
 
+    if (_observed._last_conf_idx != _log.last_conf_idx()) {
+        configuration last_log_conf = _log.get_configuration();
+        last_log_conf.current.merge(last_log_conf.previous);
+        output.rpc_configuration = last_log_conf.current;
+    }
+
     // Advance the observed state.
     _observed.advance(*this);
 
