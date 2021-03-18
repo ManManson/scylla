@@ -283,7 +283,16 @@ fsm_output fsm::get_output() {
     // to not lose messages in case arrays population throws
     std::swap(output.messages, _messages);
 
-    if (_observed._last_conf_idx != _log.last_conf_idx()) {
+    // Fill server_address_set corresponding to the configuration from
+    // the rpc point of view.
+    //
+    // Effective rpc configuration changes when one of the following applies:
+    // * `last_conf_idx()` could have changed or
+    // * A new configuration entry may be overwritten by application of two
+    //   snapshots with different configurations following each other.
+    // * Leader overwrites a follower's log.
+    if (_observed._last_conf_idx != _log.last_conf_idx() ||
+            _observed._current_term != _log.last_term()) {
         configuration last_log_conf = _log.get_configuration();
         last_log_conf.current.merge(last_log_conf.previous);
         output.rpc_configuration = last_log_conf.current;
