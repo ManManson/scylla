@@ -23,12 +23,6 @@
 
 #include "cql3/statements/property_definitions.hh"
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
-#include <optional>
-
-class keyspace_metadata;
-
 namespace cql3 {
 
 namespace statements {
