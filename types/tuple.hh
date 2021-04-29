@@ -27,6 +27,7 @@
 
 #include <boost/range/numeric.hpp>
 #include <boost/range/adaptor/transformed.hpp>
+#include <boost/range/algorithm/for_each.hpp>
 
 #include "types.hh"
 
