@@ -23,7 +23,7 @@
 #include <seastar/core/coroutine.hh>
 #include <seastar/util/closeable.hh>
 
-#include "database.hh"
+#include "table.hh"
 #include "sstables/sstables.hh"
 #include "sstables/sstables_manager.hh"
 #include "service/priority_manager.hh"
@@ -47,6 +47,9 @@
 #include "utils/fb_utilities.hh"
 #include "mutation_source_metadata.hh"
 #include "gms/gossiper.hh"
+#include "database.hh"
+
+#include <boost/range/algorithm/remove_if.hpp>
 
 static logging::logger tlogger("table");
 static seastar::metrics::label column_family_label("cf");
