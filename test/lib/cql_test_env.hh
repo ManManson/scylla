@@ -37,6 +37,7 @@
 #include "bytes.hh"
 #include "schema.hh"
 #include "test/lib/eventually.hh"
+#include "database.hh"
 
 class database;
 

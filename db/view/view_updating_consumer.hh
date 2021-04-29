@@ -21,14 +21,18 @@
 
 #pragma once
 
+#include <seastar/core/abort_source.hh>
+
 #include "dht/i_partitioner.hh"
 #include "schema_fwd.hh"
 #include "mutation_fragment.hh"
 #include "sstables/shared_sstable.hh"
-#include "database.hh"
 #include "reader_permit.hh"
+#include "db/view/row_locking.hh"
+#include "mutation.hh"
 
 class evictable_reader_handle;
+class table;
 
 namespace db::view {
 
