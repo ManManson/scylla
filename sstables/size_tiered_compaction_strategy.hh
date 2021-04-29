@@ -26,6 +26,7 @@
 #include "sstables/sstables.hh"
 #include "database.hh"
 #include <boost/algorithm/cxx11/any_of.hpp>
+#include "sstables/compaction_backlog_manager.hh"
 
 namespace sstables {
 
