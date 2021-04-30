@@ -201,17 +201,6 @@ struct basic_ratio_holder : public json::jsonable {
 typedef basic_ratio_holder<double>  ratio_holder;
 typedef basic_ratio_holder<int64_t> integral_ratio_holder;
 
-class unimplemented_exception : public base_exception {
-public:
-    unimplemented_exception()
-            : base_exception("API call is not supported yet", reply::status_type::internal_server_error) {
-    }
-};
-
-inline void unimplemented() {
-    throw unimplemented_exception();
-}
-
 template <class T>
 std::vector<T> concat(std::vector<T> a, std::vector<T>&& b) {
     a.reserve( a.size() + b.size());

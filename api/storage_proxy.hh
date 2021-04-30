@@ -21,10 +21,12 @@
 
 #pragma once
 
-#include "api.hh"
+namespace seastar::httpd { class routes; }
 
 namespace api {
 
-void set_storage_proxy(http_context& ctx, routes& r);
+struct http_context;
+
+void set_storage_proxy(http_context& ctx, seastar::httpd::routes& r);
 
 }

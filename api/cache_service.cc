@@ -22,6 +22,7 @@
 #include "cache_service.hh"
 #include "api/api-doc/cache_service.json.hh"
 #include "column_family.hh"
+#include "unimplemented.hh"
 
 namespace api {
 using namespace json;

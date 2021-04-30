@@ -29,6 +29,7 @@
 #include "db/system_keyspace_view_types.hh"
 #include "db/data_listeners.hh"
 #include "storage_service.hh"
+#include "unimplemented.hh"
 
 extern logging::logger apilog;
 

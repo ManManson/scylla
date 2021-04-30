@@ -52,6 +52,8 @@
 #include "locator/token_metadata.hh"
 #include "cdc/generation_service.hh"
 #include "service/storage_proxy.hh"
+#include "db/data_listeners.hh"
+#include "unimplemented.hh"
 
 extern logging::logger apilog;
 

@@ -21,13 +21,17 @@
 
 #pragma once
 
-#include "api.hh"
+#include <seastar/core/sharded.hh>
+#include "seastarx.hh"
 
+namespace seastar::httpd { class routes; }
 namespace netw { class messaging_service; }
 
 namespace api {
 
-void set_messaging_service(http_context& ctx, routes& r, sharded<netw::messaging_service>& ms);
-void unset_messaging_service(http_context& ctx, routes& r);
+struct http_context;
+
+void set_messaging_service(http_context& ctx, httpd::routes& r, sharded<netw::messaging_service>& ms);
+void unset_messaging_service(http_context& ctx, httpd::routes& r);
 
 }

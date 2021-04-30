@@ -21,10 +21,12 @@
 
 #pragma once
 
-#include "api.hh"
+namespace seastar::httpd { class routes; }
 
 namespace api {
 
-void set_error_injection(http_context& ctx, routes& r);
+struct http_context;
+
+void set_error_injection(http_context& ctx, seastar::httpd::routes& r);
 
 }

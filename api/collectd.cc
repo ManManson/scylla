@@ -27,6 +27,8 @@
 #include <boost/range/irange.hpp>
 #include <regex>
 
+#include "seastarx.hh"
+
 namespace api {
 
 using namespace scollectd;

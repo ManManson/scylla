@@ -21,10 +21,16 @@
 
 #pragma once
 
-#include "api.hh"
-#include <seastar/http/api_docs.hh>
+#include <memory>
+
+namespace seastar::httpd {
+    class routes;
+    class api_registry_builder20;
+} // namespace seastar::httpd
 
 namespace api {
 
-void set_config(std::shared_ptr<api_registry_builder20> rb, http_context& ctx, routes& r);
+struct http_context;
+
+void set_config(std::shared_ptr<seastar::httpd::api_registry_builder20> rb, http_context& ctx, seastar::httpd::routes& r);
 }

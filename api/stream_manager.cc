@@ -25,6 +25,7 @@
 #include "api/api-doc/stream_manager.json.hh"
 #include <vector>
 #include "gms/gossiper.hh"
+#include "api.hh"
 
 namespace api {
 

@@ -22,48 +22,54 @@
 #include "hinted_handoff.hh"
 #include "api/api-doc/hinted_handoff.json.hh"
 
+#include <seastar/http/routes.hh>
+#include <seastar/http/request.hh>
+
+#include "unimplemented.hh"
+#include "seastarx.hh"
+
 namespace api {
 
 using namespace json;
 namespace hh = httpd::hinted_handoff_json;
 
-void set_hinted_handoff(http_context& ctx, routes& r) {
-    hh::list_endpoints_pending_hints.set(r, [] (std::unique_ptr<request> req) {
+void set_hinted_handoff(http_context& ctx, httpd::routes& r) {
+    hh::list_endpoints_pending_hints.set(r, [] (std::unique_ptr<httpd::request> req) {
         //TBD
         unimplemented();
         std::vector<sstring> res;
         return make_ready_future<json::json_return_type>(res);
     });
 
-    hh::truncate_all_hints.set(r, [] (std::unique_ptr<request> req) {
+    hh::truncate_all_hints.set(r, [] (std::unique_ptr<httpd::request> req) {
         //TBD
         unimplemented();
         sstring host = req->get_query_param("host");
         return make_ready_future<json::json_return_type>(json_void());
     });
 
-    hh::schedule_hint_delivery.set(r, [] (std::unique_ptr<request> req) {
+    hh::schedule_hint_delivery.set(r, [] (std::unique_ptr<httpd::request> req) {
         //TBD
         unimplemented();
         sstring host = req->get_query_param("host");
         return make_ready_future<json::json_return_type>(json_void());
     });
 
-    hh::pause_hints_delivery.set(r, [] (std::unique_ptr<request> req) {
+    hh::pause_hints_delivery.set(r, [] (std::unique_ptr<httpd::request> req) {
         //TBD
         unimplemented();
         sstring pause = req->get_query_param("pause");
         return make_ready_future<json::json_return_type>(json_void());
     });
 
-    hh::get_create_hint_count.set(r, [] (std::unique_ptr<request> req) {
+    hh::get_create_hint_count.set(r, [] (std::unique_ptr<httpd::request> req) {
         //TBD
         unimplemented();
         sstring host = req->get_query_param("host");
         return make_ready_future<json::json_return_type>(0);
     });
 
-    hh::get_not_stored_hints_count.set(r, [] (std::unique_ptr<request> req) {
+    hh::get_not_stored_hints_count.set(r, [] (std::unique_ptr<httpd::request> req) {
         //TBD
         unimplemented();
         sstring host = req->get_query_param("host");

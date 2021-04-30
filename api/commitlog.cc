@@ -24,6 +24,7 @@
 #include "api/api-doc/commitlog.json.hh"
 #include "database.hh"
 #include <vector>
+#include "api.hh"
 
 namespace api {
 

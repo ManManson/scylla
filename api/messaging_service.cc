@@ -25,6 +25,7 @@
 #include "api/api-doc/messaging_service.json.hh"
 #include <iostream>
 #include <sstream>
+#include "api.hh"
 
 using namespace httpd::messaging_service_json;
 using namespace netw;

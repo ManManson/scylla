@@ -28,6 +28,8 @@
 #include "utils/histogram.hh"
 #include "database.hh"
 #include "seastar/core/scheduling_specific.hh"
+#include "api.hh"
+#include "unimplemented.hh"
 
 namespace api {
 

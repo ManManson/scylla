@@ -25,6 +25,8 @@
 #include "database.hh"
 #include <sstream>
 #include <boost/algorithm/string/replace.hpp>
+#include "api.hh"
+#include <seastar/http/api_docs.hh>
 
 namespace api {
 
@@ -89,7 +91,7 @@ future<> get_config_swagger_entry(std::string_view name, const std::string& desc
 
 namespace cs = httpd::config_json;
 
-void set_config(std::shared_ptr < api_registry_builder20 > rb, http_context& ctx, routes& r) {
+void set_config(std::shared_ptr < seastar::httpd::api_registry_builder20 > rb, http_context& ctx, routes& r) {
     rb->register_function(r, [&ctx] (output_stream<char>& os) {
         return do_with(true, [&os, &ctx] (bool& first) {
             auto f = make_ready_future();
