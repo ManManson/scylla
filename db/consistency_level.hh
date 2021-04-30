@@ -47,7 +47,7 @@
 #include "exceptions/exceptions.hh"
 #include "utils/fb_utilities.hh"
 #include "gms/inet_address.hh"
-#include "database.hh"
+#include "keyspace.hh"
 
 #include <iosfwd>
 #include <vector>

@@ -24,6 +24,8 @@
 #include <boost/range/adaptors.hpp>
 #include <boost/range/algorithm.hpp>
 
+#include "table.hh"
+
 namespace sstables {
 
 size_tiered_compaction_strategy_options::size_tiered_compaction_strategy_options(const std::map<sstring, sstring>& options) {

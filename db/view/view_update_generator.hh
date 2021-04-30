@@ -24,6 +24,7 @@
 #include "database_fwd.hh"
 #include "sstables/sstables.hh"
 #include "db/view/view_updating_consumer.hh"
+#include "table.hh"
 
 #include <seastar/core/abort_source.hh>
 #include <seastar/core/condition-variable.hh>

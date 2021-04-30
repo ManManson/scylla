@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include "database.hh"
 #include "dht/i_partitioner.hh"
 #include "keys.hh"
 #include "query-request.hh"
@@ -30,6 +29,7 @@
 #include "utils/exponential_backoff_retry.hh"
 #include "utils/serialized_action.hh"
 #include "utils/UUID.hh"
+#include "table.hh"
 
 #include <seastar/core/abort_source.hh>
 #include <seastar/core/future.hh>
@@ -42,6 +42,8 @@
 #include <optional>
 #include <unordered_map>
 #include <vector>
+
+class database;
 
 namespace db {
 

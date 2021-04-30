@@ -45,6 +45,8 @@
 #include <cctype>
 #include <vector>
 
+#include "database.hh"
+
 #ifdef THRIFT_USES_BOOST
 #include <boost/make_shared.hpp>
 #endif
