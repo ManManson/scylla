@@ -48,6 +48,7 @@
 #include "log.hh"
 #include "service/migration_manager.hh"
 #include "service/storage_proxy.hh"
+#include "service/raft/raft_services.hh"
 #include "to_string.hh"
 #include "gms/gossiper.hh"
 #include "gms/failure_detector.hh"
@@ -637,6 +638,15 @@ void storage_service::join_token_ring(int delay) {
 
     // start participating in the ring.
     set_gossip_tokens(_gossiper, _bootstrap_tokens, _cdc_gen_id);
+
+    // Until topology tables are managed by Raft, Gossip continues to be
+    // the primary source of truth, so we should initialize Raft
+    // once gossip tokens have been persisted, so that if
+    // initialization fails, the node is visible to removenode
+    // which can be used to clean this node's state from the
+    // cluster.
+    _raft_svcs.join_raft_group0().get();
+
     set_mode(mode::NORMAL, "node is now in normal status", true);
 
     if (get_token_metadata().sorted_tokens().empty()) {
@@ -724,6 +734,7 @@ void storage_service::bootstrap() {
             slogger.debug("Removing replaced endpoint {} from system.peers", *replace_addr);
             db::system_keyspace::remove_endpoint(*replace_addr).get();
         }
+        _raft_svcs.leave_raft_group0().get();
     }
 
     _db.invoke_on_all([this] (database& db) {
@@ -2350,6 +2361,7 @@ future<> storage_service::removenode(sstring host_id_string, std::list<gms::inet
 
 
                 // Step 5: Announce the node has left
+                ss._raft_svcs.leave_raft_group0().get();
                 ss._gossiper.advertise_token_removed(endpoint, host_id).get();
                 std::unordered_set<token> tmp(tokens.begin(), tokens.end());
                 ss.excise(std::move(tmp), endpoint);
@@ -3654,6 +3666,7 @@ future<> storage_service::force_remove_completion() {
                             slogger.warn("No host_id is found for endpoint {}", endpoint);
                             continue;
                         }
+                        ss._raft_svcs.leave_raft_group0().get();
                         ss._gossiper.advertise_token_removed(endpoint, host_id).get();
                         std::unordered_set<token> tokens_set(tokens.begin(), tokens.end());
                         ss.excise(tokens_set, endpoint);
