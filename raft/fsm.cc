@@ -417,21 +417,23 @@ void fsm::maybe_commit() {
 }
 
 void fsm::tick_leader() {
-    if (election_elapsed() >= ELECTION_TIMEOUT) {
-        // 6.2 Routing requests to the leader
-        // A leader in Raft steps down if an election timeout
-        // elapses without a successful round of heartbeats to a majority
-        // of its cluster; this allows clients to retry their requests
-        // with another server.
-        return become_follower(server_id{});
+    const bool is_past_election_timeout = election_elapsed() >= ELECTION_TIMEOUT;
+
+    if (is_past_election_timeout) {
+        // Reset last election time on election timeout.
+        _last_election_time = _clock.now();
     }
 
-    auto active =  leader_state().tracker.get_activity_tracker();
+    auto active = leader_state().tracker.get_activity_tracker();
     active(_my_id); // +1 for self
     for (auto& [id, progress] : leader_state().tracker) {
         if (progress.id != _my_id) {
-            if (_failure_detector.is_alive(progress.id)) {
-                active(progress.id);
+            // Check that quorum is active
+            // only after `election_elapsed() >= ELECTION_TIMEOUT`.
+            if (is_past_election_timeout) {
+                if (_failure_detector.is_alive(progress.id)) {
+                    active(progress.id);
+                }
             }
             switch(progress.state) {
             case follower_progress::state::PROBE:
@@ -456,10 +458,24 @@ void fsm::tick_leader() {
             }
         }
     }
-    if (active) {
-        // Advance last election time if we heard from
-        // the quorum during this tick.
-        _last_election_time = _clock.now();
+    if (!is_past_election_timeout) {
+        return;
+    }
+    // Reset last election time on election timeout.
+    _last_election_time = _clock.now();
+    if (!active) {
+        // 6.2 Routing requests to the leader
+        // A leader in Raft steps down if an election timeout
+        // elapses without a successful round of heartbeats to a majority
+        // of its cluster; this allows clients to retry their requests
+        // with another server.
+        become_follower(server_id{});
+        return;
+    }
+    // Abort the leadership transfer if leader didn't manage to
+    // complete it within election timeout.
+    if (leader_state().stepdown) {
+        leader_state().stepdown = false;
     }
 }
 
@@ -888,6 +904,9 @@ bool fsm::apply_snapshot(snapshot snp, size_t trailing) {
 
 void fsm::transfer_leadership() {
     check_is_leader();
+    // Reset election time so that we can reliably track the duration of
+    // leadership transfer and can abort it after election timeout.
+    _last_election_time = _clock.now();
     leader_state().stepdown = true;
     // Stop new requests from commig in
     leader_state().log_limiter_semaphore.consume(_config.max_log_size);
