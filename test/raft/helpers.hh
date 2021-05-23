@@ -110,6 +110,11 @@ public:
     raft::log& get_log() {
         return raft::fsm::get_log();
     }
+
+    bool leadership_transfer_active() const {
+        assert(is_leader());
+        return leader_state().stepdown;
+    }
 };
 
 // NOTE: it doesn't compare data contents, just the data type
@@ -219,7 +224,7 @@ raft::server_address_set address_set(std::initializer_list<raft::server_id> ids)
     return set;
 }
 
-raft::fsm create_follower(raft::server_id id, raft::log log, raft::failure_detector& fd = trivial_failure_detector) {
-    return raft::fsm(id, term_t{}, server_id{}, std::move(log), fd, fsm_cfg);
+fsm_debug create_follower(raft::server_id id, raft::log log, raft::failure_detector& fd = trivial_failure_detector) {
+    return fsm_debug(id, term_t{}, server_id{}, std::move(log), fd, fsm_cfg);
 }
 

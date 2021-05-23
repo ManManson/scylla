@@ -849,3 +849,31 @@ BOOST_AUTO_TEST_CASE(test_proposal_5) {
 
 // TestProposalByProxy
 // TBD when we support add_entry() on follower
+
+// TestLeaderTransferTimeout
+BOOST_AUTO_TEST_CASE(test_leader_transfer_timeout) {
+    discrete_failure_detector fd;
+    raft::server_id A_id = id(), B_id = id(), C_id = id();
+
+    raft::log log(raft::snapshot{.idx = raft::index_t{0},
+        .config = raft::configuration{A_id, B_id, C_id}});
+    auto A = create_follower(A_id, log, fd);
+    auto B = create_follower(B_id, log, fd);
+    auto C = create_follower(C_id, log, fd);
+    // Elect A leader.
+    election_timeout(A);
+    communicate(A, B, C);
+    BOOST_REQUIRE(A.is_leader());
+    // Isolate node C from the A's point of view.
+    fd.mark_dead(B_id);
+    // Start leadership transfer to B.
+    A.transfer_leadership();
+    BOOST_CHECK(A.leadership_transfer_active());
+    // Wait for election timeout so that A aborts leadership transfer procedure.
+    election_threshold(A);
+    // By now A should abort leadership transfer procedure.
+    // We can check that leadership abort succeeded by checking that A is still
+    // a leader.
+    BOOST_CHECK(A.is_leader());
+    BOOST_CHECK(!A.leadership_transfer_active());
+}
