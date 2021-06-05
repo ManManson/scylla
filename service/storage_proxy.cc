@@ -104,6 +104,7 @@
 #include "seastar/core/with_timeout.hh"
 #include "locator/abstract_replication_strategy.hh"
 #include "service/paxos/cas_request.hh"
+#include "mutation_partition_view.hh"
 
 namespace bi = boost::intrusive;
 
