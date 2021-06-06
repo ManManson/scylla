@@ -81,6 +81,7 @@
 #include "types/list.hh"
 #include "types/map.hh"
 #include "utils/error_injection.hh"
+#include "utils/exponential_backoff_retry.hh"
 
 using namespace std::chrono_literals;
 
