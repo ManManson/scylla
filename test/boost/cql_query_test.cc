@@ -4960,3 +4960,42 @@ SEASTAR_TEST_CASE(test_user_based_sla_queries) {
         });
     });
 }
+
+//
+// `uuid()` CQL function isn't marked as "pure" hence
+// its execution is delayed until the actual execution of the function begins,
+// which seems to be logically correct.
+// Some other functions, related to timeuuid, e.g. `currenttimeuuid()`, are
+// marked as "pure" so that they are executed when a statement is being prepared.
+//
+// This can lead to unobvious behavior if used in partition keys with insert
+// statement, for example.
+// The former case would create a new partition each time a prepared statement
+// is executed, but the latter will not and could possibly cause overwriting
+// data in the same partition.
+SEASTAR_TEST_CASE(test_uuid_timeuuid_is_pure_issue) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        {
+            e.execute_cql("CREATE TABLE test_timeuuid (pk timeuuid PRIMARY KEY)").get();
+            auto insert_stmt = e.prepare("INSERT INTO test_timeuuid (pk) VALUES (currenttimeuuid())").get();
+            e.execute_prepared(insert_stmt, {}).get();
+            sleep(1ms).get();
+            // Check that the second execution of prepared insert statement
+            // yields the same value for inserted `pk` and so doesn't produce
+            // a different partition.
+            e.execute_prepared(insert_stmt, {}).get();
+            auto msg = e.execute_cql("SELECT * FROM test_timeuuid").get();
+            assert_that(msg).is_rows().with_size(1);
+        }
+        {
+            e.execute_cql("CREATE TABLE test_uuid (pk uuid PRIMARY KEY)").get();
+            auto insert_stmt = e.prepare("INSERT INTO test_uuid (pk) VALUES (uuid())").get();
+            e.execute_prepared(insert_stmt, {}).get();
+            // Check that the second execution is evaluated again and yields a
+            // different value for inserted `pk`.
+            e.execute_prepared(insert_stmt, {}).get();
+            auto msg = e.execute_cql("SELECT * FROM test_uuid").get();
+            assert_that(msg).is_rows().with_size(2);
+        }
+    });
+}
