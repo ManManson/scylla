@@ -21,10 +21,13 @@
 
 #pragma once
 
-#include "mutation_reader.hh"
-#include "memtable.hh"
 #include "schema.hh"
 #include "database_fwd.hh"
+#include "dht/i_partitioner.hh"
+#include "db/timeout_clock.hh"
+
+class row;
+class mutation_source;
 
 namespace db {
 
