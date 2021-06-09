@@ -23,6 +23,7 @@
 #include <limits>
 #include <ostream>
 #include <utility>
+#include <random>
 
 #include "dht/token.hh"
 #include "dht/token-sharding.hh"

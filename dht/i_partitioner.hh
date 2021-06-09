@@ -42,11 +42,8 @@
 
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/sstring.hh>
-#include "types.hh"
 #include "keys.hh"
-#include "utils/managed_bytes.hh"
 #include <memory>
-#include <random>
 #include <utility>
 #include <vector>
 #include <compare>

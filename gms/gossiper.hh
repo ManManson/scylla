@@ -59,6 +59,7 @@
 #include <algorithm>
 #include <chrono>
 #include <set>
+#include <random>
 #include <seastar/core/condition-variable.hh>
 #include <seastar/core/metrics_registration.hh>
 #include <seastar/core/abort_source.hh>
