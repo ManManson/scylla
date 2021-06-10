@@ -38,18 +38,15 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/distributed.hh>
-#include "utils/bounded_stats_deque.hh"
 #include <iosfwd>
 #include <cmath>
 #include <list>
 #include <map>
 #include <optional>
+#include <chrono>
 
+#include "utils/bounded_stats_deque.hh"
 #include "gms/inet_address.hh"
-
 
 namespace gms {
 class i_failure_detection_event_listener;
