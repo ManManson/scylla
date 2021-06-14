@@ -91,6 +91,9 @@ private:
     // 2) monotonic
     // 3) unique.
     mutable int _list_append_seq = 0;
+
+    // FIXME: mutable is a hack!
+    mutable std::unordered_map<uint64_t, bytes_opt> _cached_values;
 private:
     /**
      * @brief Batch query_options constructor.
@@ -276,6 +279,13 @@ public:
     }
 
     void prepare(const std::vector<lw_shared_ptr<column_specification>>& specs);
+
+    // FIXME: should be non-const since it's mutating internals
+    void set_cached_value(uint64_t id, bytes_opt value) const;
+    const std::unordered_map<uint64_t, bytes_opt>& cached_values() const;
+    void set_cached_values(std::unordered_map<uint64_t, bytes_opt> vals);
+    void append_cached_values(std::unordered_map<uint64_t, bytes_opt> vals) const;
+
 private:
     void fill_value_views();
 };

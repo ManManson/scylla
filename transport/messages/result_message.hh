@@ -107,15 +107,21 @@ std::ostream& operator<<(std::ostream& os, const result_message::void_message& m
 // it is a sure sign of a error.
 class result_message::bounce_to_shard : public result_message {
     unsigned _shard;
+
+    using cached_call_id = uint64_t;
+    using cached_values_type = std::unordered_map<cached_call_id, bytes_opt>;
+    cached_values_type _cached_values;
 public:
-    bounce_to_shard(unsigned shard) : _shard(shard) {}
+    bounce_to_shard(unsigned shard, cached_values_type vals) : _shard(shard), _cached_values(std::move(vals)) {}
     virtual void accept(result_message::visitor& v) const override {
         v.visit(*this);
     }
     virtual std::optional<unsigned> move_to_shard() const {
         return _shard;
     }
-
+    const cached_values_type& cached_values() const {
+        return _cached_values;
+    }
 };
 
 std::ostream& operator<<(std::ostream& os, const result_message::bounce_to_shard& msg);

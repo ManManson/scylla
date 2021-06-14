@@ -377,6 +377,8 @@ future<shared_ptr<cql_transport::messages::result_message>> batch_statement::exe
         } else if (keys.size() != 1 || keys.front().equal(request->key().front(), dht::ring_position_comparator(*schema)) == false) {
             throw exceptions::invalid_request_exception("BATCH with conditions cannot span multiple partitions");
         }
+        options.append_cached_values(statement_options.cached_values());
+
         std::vector<query::clustering_range> ranges = statement.create_clustering_ranges(statement_options, json_cache);
 
         request->add_row_update(statement, std::move(ranges), std::move(json_cache), statement_options);
@@ -389,7 +391,7 @@ future<shared_ptr<cql_transport::messages::result_message>> batch_statement::exe
     if (shard != this_shard_id()) {
         proxy.get_stats().replica_cross_shard_ops++;
         return make_ready_future<shared_ptr<cql_transport::messages::result_message>>(
-                make_shared<cql_transport::messages::result_message::bounce_to_shard>(shard));
+                ::make_shared<cql_transport::messages::result_message::bounce_to_shard>(shard, options.cached_values()));
     }
 
     return proxy.cas(schema, request, request->read_command(proxy), request->key(),

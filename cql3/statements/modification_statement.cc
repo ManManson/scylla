@@ -67,6 +67,8 @@ namespace cql3 {
 
 namespace statements {
 
+logging::logger log("cql3_statemenmts");
+
 timeout_config_selector
 modification_statement_timeout(const schema& s) {
     if (s.is_counter()) {
@@ -332,10 +334,12 @@ modification_statement::execute_with_condition(service::storage_proxy& proxy, se
 
     auto shard = service::storage_proxy::cas_shard(*s, request->key()[0].start()->value().as_decorated_key().token());
     if (shard != this_shard_id()) {
+        log.info("!!!!!!!!!!!!!!!! redirect to shard {}", shard);
         proxy.get_stats().replica_cross_shard_ops++;
         return make_ready_future<shared_ptr<cql_transport::messages::result_message>>(
-                make_shared<cql_transport::messages::result_message::bounce_to_shard>(shard));
+                ::make_shared<cql_transport::messages::result_message::bounce_to_shard>(shard, options.cached_values()));
     }
+    log.info("!!!!!!!!!!!!!!!! execute lwt command on the same shard {}", this_shard_id());
 
     return proxy.cas(s, request, request->read_command(proxy), request->key(),
             {read_timeout, qs.get_permit(), qs.get_client_state(), qs.get_trace_state()},

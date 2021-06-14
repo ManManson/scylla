@@ -53,9 +53,10 @@ namespace functions {
 class function_call : public non_terminal {
     const shared_ptr<scalar_function> _fun;
     const std::vector<shared_ptr<term>> _terms;
+    const uint64_t _id;
 public:
-    function_call(shared_ptr<scalar_function> fun, std::vector<shared_ptr<term>> terms)
-            : _fun(std::move(fun)), _terms(std::move(terms)) {
+    function_call(shared_ptr<scalar_function> fun, std::vector<shared_ptr<term>> terms, uint64_t id)
+            : _fun(std::move(fun)), _terms(std::move(terms)), _id(id) {
     }
     virtual void collect_marker_specification(variable_specifications& bound_names) const override;
     virtual shared_ptr<terminal> bind(const query_options& options) override;
