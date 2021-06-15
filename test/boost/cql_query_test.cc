@@ -4976,7 +4976,6 @@ SEASTAR_TEST_CASE(test_user_based_sla_queries) {
 SEASTAR_TEST_CASE(test_uuid_timeuuid_is_pure_issue) {
     return do_with_cql_env_thread([] (cql_test_env& e) {
         BOOST_TEST_MESSAGE("timeuuid test");
-        testlog.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         {
             e.execute_cql("CREATE TABLE test_timeuuid (pk timeuuid PRIMARY KEY)").get();
             auto insert_stmt = e.prepare("INSERT INTO test_timeuuid (pk) VALUES (currenttimeuuid()) IF NOT EXISTS").get();
@@ -4990,7 +4989,6 @@ SEASTAR_TEST_CASE(test_uuid_timeuuid_is_pure_issue) {
             assert_that(msg).is_rows().with_size(1);
         }
         BOOST_TEST_MESSAGE("uuid test");
-        testlog.info("*********************************");
         {
             e.execute_cql("CREATE TABLE test_uuid (pk uuid PRIMARY KEY)").get();
             auto insert_stmt = e.prepare("INSERT INTO test_uuid (pk) VALUES (uuid()) IF NOT EXISTS").get();

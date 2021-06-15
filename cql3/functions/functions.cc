@@ -39,6 +39,9 @@
 
 #include "error_injection_fcts.hh"
 
+#include "xx_hasher.hh"
+#include "hashing.hh"
+
 namespace std {
 std::ostream& operator<<(std::ostream& os, const std::vector<data_type>& arg_types) {
     for (size_t i = 0; i < arg_types.size(); ++i) {
@@ -441,15 +444,21 @@ function_call::bind(const query_options& options) {
     return make_terminal(_fun, cql3::raw_value::make_value(bind_and_get(options)), options.get_cql_serialization_format());
 }
 
+namespace {
+
+uint64_t calculate_function_call_digest(const scalar_function& f, const std::vector<bytes_opt>& parameters) {
+    xx_hasher h;
+    feed_hash(h, f.name().name); // FIXME: probably need to consider full name (+= ks)
+    for (const auto& param_buf : parameters) {
+        feed_hash(h, param_buf);
+    }
+    return h.finalize_uint64();
+}
+
+} // anonymous namespace
+
 cql3::raw_value_view
 function_call::bind_and_get(const query_options& options) {
-    log.info("*************** function_call::bind_and_get id = {}", _id);
-    auto query_cached_values = options.cached_values();
-    auto cached_value_it = query_cached_values.find(_id);
-    if (query_cached_values.end() != cached_value_it) {
-        log.info("****************** function_call::bind_and_get have cached value: {}", cached_value_it->second);
-        return raw_value_view::make_temporary(raw_value::make_value(cached_value_it->second));
-    }
     std::vector<bytes_opt> buffers;
     buffers.reserve(_terms.size());
     for (auto&& t : _terms) {
@@ -461,9 +470,14 @@ function_call::bind_and_get(const query_options& options) {
         }
         buffers.push_back(std::move(to_bytes_opt(val)));
     }
+    auto call_id = calculate_function_call_digest(*_fun, buffers);
+    auto query_cached_values = options.cached_values();
+    auto cached_value_it = query_cached_values.find(call_id);
+    if (query_cached_values.end() != cached_value_it) {
+        return raw_value_view::make_temporary(raw_value::make_value(cached_value_it->second));
+    }
     auto result = execute_internal(options.get_cql_serialization_format(), *_fun, std::move(buffers));
-    log.info("*********************** function_call::bind_and_get no cached value, result: {}", result);
-    options.set_cached_value(_id, result);
+    options.set_cached_value(call_id, result);
     return cql3::raw_value_view::make_temporary(cql3::raw_value::make_value(result));
 }
 
@@ -521,8 +535,6 @@ function_call::make_terminal(shared_ptr<function> fun, cql3::raw_value result, c
 
 ::shared_ptr<term>
 function_call::raw::prepare(database& db, const sstring& keyspace, lw_shared_ptr<column_specification> receiver) const {
-    static thread_local uint64_t func_call_id = 0;
-
     std::vector<shared_ptr<assignment_testable>> args;
     args.reserve(_terms.size());
     std::transform(_terms.begin(), _terms.end(), std::back_inserter(args),
@@ -569,7 +581,7 @@ function_call::raw::prepare(database& db, const sstring& keyspace, lw_shared_ptr
     if (all_terminal && scalar_fun->is_pure()) {
         return make_terminal(scalar_fun, cql3::raw_value::make_value(execute(*scalar_fun, parameters)), query_options::DEFAULT.get_cql_serialization_format());
     } else {
-        return ::make_shared<function_call>(scalar_fun, parameters, func_call_id++);
+        return ::make_shared<function_call>(scalar_fun, parameters);
     }
 }
 
