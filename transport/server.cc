@@ -877,11 +877,12 @@ future<foreign_ptr<std::unique_ptr<cql_server::response>>>
 cql_server::connection::process(uint16_t stream, request_reader in, service::client_state& client_state, service_permit permit,
         tracing::trace_state_ptr trace_state, Process process_fn) {
     fragmented_temporary_buffer::istream is = in.get_stream();
-
+    clogger.info("connection::process enter");
     return process_fn(client_state, _server._query_processor, in, stream,
             _version, _cql_serialization_format, permit, trace_state, true, {}) // FIXME: pass only map
             .then([stream, &client_state, this, is, permit, process_fn, trace_state]
                    (std::variant<foreign_ptr<std::unique_ptr<cql_server::response>>, shared_ptr<messages::result_message::bounce_to_shard>> msg) mutable {
+        clogger.info("connection::process in then block");
         shared_ptr<messages::result_message::bounce_to_shard>* bounce_msg = std::get_if<shared_ptr<messages::result_message::bounce_to_shard>>(&msg);
         if (bounce_msg) {
             clogger.info("$$$$$$$$$$$$$ connection::process. Got bounce msg, redirecting to shard {}", *(*bounce_msg)->move_to_shard());
@@ -901,6 +902,7 @@ process_query_internal(service::client_state& client_state, distributed<cql3::qu
     q_state->options = in.read_options(version, serialization_format, qp.local().get_cql_config());
     auto& options = *q_state->options;
     if (!cached_vals.empty()) {
+        clogger.info("process_query_internal: set cached values");
         options.set_cached_values(cached_vals);
     }
     auto skip_metadata = options.skip_metadata();
@@ -915,8 +917,10 @@ process_query_internal(service::client_state& client_state, distributed<cql3::qu
         tracing::begin(trace_state, "Execute CQL3 query", client_state.get_client_address());
     }
 
+    clogger.info("Processing statement (process_query_internal)");
     return qp.local().execute_direct(query, query_state, options).then([q_state = std::move(q_state), stream, skip_metadata, version] (auto msg) {
         if (msg->move_to_shard()) {
+            clogger.info("process_query_internal move to shard is set");
             return std::variant<foreign_ptr<std::unique_ptr<cql_server::response>>, ::shared_ptr<messages::result_message::bounce_to_shard>>(dynamic_pointer_cast<messages::result_message::bounce_to_shard>(msg));
         } else {
             tracing::trace(q_state->query_state.get_trace_state(), "Done processing - preparing a result");
@@ -994,6 +998,7 @@ process_execute_internal(service::client_state& client_state, distributed<cql3::
     }
     auto& options = *q_state->options;
     if (!cached_vals.empty()) {
+        clogger.info("process_execute_internal: set cached values");
         options.set_cached_values(cached_vals);
     }
     auto skip_metadata = options.skip_metadata();
@@ -1026,9 +1031,12 @@ process_execute_internal(service::client_state& client_state, distributed<cql3::
     }
 
     tracing::trace(trace_state, "Processing a statement");
+    clogger.info("Processing a statement (process_execute_internal)");
     return qp.local().execute_prepared(std::move(prepared), std::move(cache_key), query_state, options, needs_authorization)
             .then([trace_state = query_state.get_trace_state(), skip_metadata, q_state = std::move(q_state), stream, version] (auto msg) {
+        clogger.info("process_execute_internal execute_prepared then");
         if (msg->move_to_shard()) {
+            clogger.info("process_execute_internal move to shard is set");
             return std::variant<foreign_ptr<std::unique_ptr<cql_server::response>>, ::shared_ptr<messages::result_message::bounce_to_shard>>(dynamic_pointer_cast<messages::result_message::bounce_to_shard>(msg));
         } else {
             tracing::trace(q_state->query_state.get_trace_state(), "Done processing - preparing a result");
@@ -1138,6 +1146,7 @@ process_batch_internal(service::client_state& client_state, distributed<cql3::qu
                                                                      qp.local().get_cql_config())), std::move(values)));
     auto& options = *q_state->options;
     if (!cached_vals.empty()) {
+        clogger.info("process_batch_internal: set cached values");
         options.set_cached_values(cached_vals);
     }
 
