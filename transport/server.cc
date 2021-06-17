@@ -857,14 +857,14 @@ cql_server::connection::process_on_shard(::shared_ptr<messages::result_message::
         service::client_state& cs, service_permit permit, tracing::trace_state_ptr trace_state, Process process_fn) {
     return _server.container().invoke_on(*bounce_msg->move_to_shard(), _server._config.bounce_request_smp_service_group,
             [this, is = std::move(is), cs = cs.move_to_other_shard(), stream, permit = std::move(permit), process_fn,
-             gt = tracing::global_trace_state_ptr(std::move(trace_state)), cached_vals = std::move(bounce_msg->cached_values())] (cql_server& server) {
+             gt = tracing::global_trace_state_ptr(std::move(trace_state)), cached_vals = std::move(bounce_msg->cached_function_calls())] (cql_server& server) mutable {
         service::client_state client_state = cs.get();
         return do_with(bytes_ostream(), std::move(client_state), std::move(cached_vals), [this, &server, is = std::move(is), stream, process_fn,
                                                                   trace_state = tracing::trace_state_ptr(gt)]
                                               (bytes_ostream& linearization_buffer, service::client_state& client_state, std::unordered_map<uint64_t, bytes_opt>& cached_vals) mutable {
             request_reader in(is, linearization_buffer);
             return process_fn(client_state, server._query_processor, in, stream, _version, _cql_serialization_format,
-                    /* FIXME */empty_service_permit(), std::move(trace_state), false, cached_vals).then([] (auto msg) {
+                    /* FIXME */empty_service_permit(), std::move(trace_state), false, std::move(cached_vals)).then([] (auto msg) {
                 // result here has to be foreign ptr
                 return std::get<foreign_ptr<std::unique_ptr<cql_server::response>>>(std::move(msg));
             });
@@ -903,7 +903,7 @@ process_query_internal(service::client_state& client_state, distributed<cql3::qu
     q_state->options = in.read_options(version, serialization_format, qp.local().get_cql_config());
     auto& options = *q_state->options;
     if (!cached_vals.empty()) {
-        options.set_cached_values(cached_vals);
+        options.set_cached_function_calls(std::move(cached_vals));
     }
     auto skip_metadata = options.skip_metadata();
 
@@ -995,7 +995,7 @@ process_execute_internal(service::client_state& client_state, distributed<cql3::
     }
     auto& options = *q_state->options;
     if (!cached_vals.empty()) {
-        options.set_cached_values(cached_vals);
+        options.set_cached_function_calls(std::move(cached_vals));
     }
     auto skip_metadata = options.skip_metadata();
 
@@ -1046,7 +1046,7 @@ future<foreign_ptr<std::unique_ptr<cql_server::response>>> cql_server::connectio
 static future<process_fn_return_type>
 process_batch_internal(service::client_state& client_state, distributed<cql3::query_processor>& qp, request_reader in,
         uint16_t stream, cql_protocol_version_type version, cql_serialization_format serialization_format,
-        service_permit permit, tracing::trace_state_ptr trace_state, bool init_trace, std::unordered_map<uint64_t, bytes_opt> cached_vals) {
+        service_permit permit, tracing::trace_state_ptr trace_state, bool init_trace, std::unordered_map<uint64_t, bytes_opt> cached_fn_calls) {
     if (version == 1) {
         throw exceptions::protocol_exception("BATCH messages are not support in version 1 of the protocol");
     }
@@ -1137,8 +1137,8 @@ process_batch_internal(service::client_state& client_state, distributed<cql3::qu
     q_state->options = std::make_unique<cql3::query_options>(cql3::query_options::make_batch_options(std::move(*in.read_options(version < 3 ? 1 : version, serialization_format,
                                                                      qp.local().get_cql_config())), std::move(values)));
     auto& options = *q_state->options;
-    if (!cached_vals.empty()) {
-        options.set_cached_values(cached_vals);
+    if (!cached_fn_calls.empty()) {
+        options.set_cached_function_calls(std::move(cached_fn_calls));
     }
 
     if (init_trace) {

@@ -471,13 +471,13 @@ function_call::bind_and_get(const query_options& options) {
         buffers.push_back(std::move(to_bytes_opt(val)));
     }
     auto call_id = calculate_function_call_digest(*_fun, buffers);
-    auto query_cached_values = options.cached_values();
-    auto cached_value_it = query_cached_values.find(call_id);
-    if (query_cached_values.end() != cached_value_it) {
+    auto query_cached_fn_calls = options.cached_function_calls();
+    auto cached_value_it = query_cached_fn_calls.find(call_id);
+    if (query_cached_fn_calls.end() != cached_value_it) {
         return raw_value_view::make_temporary(raw_value::make_value(cached_value_it->second));
     }
     auto result = execute_internal(options.get_cql_serialization_format(), *_fun, std::move(buffers));
-    options.set_cached_value(call_id, result);
+    options.cache_function_call(call_id, result);
     return cql3::raw_value_view::make_temporary(cql3::raw_value::make_value(result));
 }
 

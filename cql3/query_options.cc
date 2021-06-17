@@ -191,20 +191,20 @@ db::consistency_level query_options::check_serial_consistency() const {
     throw exceptions::protocol_exception("Consistency level for LWT is missing for a request with conditions");
 }
 
-void query_options::set_cached_value(uint64_t id, bytes_opt value) const {
-    _cached_values.emplace(id, value);
+void query_options::cache_function_call(uint64_t id, bytes_opt value) const {
+    _cached_fn_calls.emplace(id, value);
 }
 
-const std::unordered_map<uint64_t, bytes_opt>& query_options::cached_values() const {
-    return _cached_values;
+const std::unordered_map<uint64_t, bytes_opt>& query_options::cached_function_calls() const {
+    return _cached_fn_calls;
 }
 
-void query_options::set_cached_values(std::unordered_map<uint64_t, bytes_opt> vals) {
-    _cached_values = std::move(vals);
+void query_options::set_cached_function_calls(std::unordered_map<uint64_t, bytes_opt> vals) {
+    _cached_fn_calls = std::move(vals);
 }
 
-void query_options::append_cached_values(std::unordered_map<uint64_t, bytes_opt> vals) const {
-    _cached_values.insert(vals.begin(), vals.end());
+void query_options::append_cached_function_calls(std::unordered_map<uint64_t, bytes_opt> vals) const {
+    _cached_fn_calls.insert(vals.begin(), vals.end());
 }
 
 }

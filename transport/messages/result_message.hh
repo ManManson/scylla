@@ -109,18 +109,18 @@ class result_message::bounce_to_shard : public result_message {
     unsigned _shard;
 
     using cached_call_id = uint64_t;
-    using cached_values_type = std::unordered_map<cached_call_id, bytes_opt>;
-    cached_values_type _cached_values;
+    using cached_fn_calls_type = std::unordered_map<cached_call_id, bytes_opt>;
+    cached_fn_calls_type _cached_fn_calls;
 public:
-    bounce_to_shard(unsigned shard, cached_values_type vals) : _shard(shard), _cached_values(std::move(vals)) {}
+    bounce_to_shard(unsigned shard, cached_fn_calls_type vals) : _shard(shard), _cached_fn_calls(std::move(vals)) {}
     virtual void accept(result_message::visitor& v) const override {
         v.visit(*this);
     }
     virtual std::optional<unsigned> move_to_shard() const {
         return _shard;
     }
-    const cached_values_type& cached_values() const {
-        return _cached_values;
+    cached_fn_calls_type cached_function_calls() && {
+        return std::move(_cached_fn_calls);
     }
 };
 
