@@ -4973,31 +4973,66 @@ SEASTAR_TEST_CASE(test_user_based_sla_queries) {
 // The former case would create a new partition each time a prepared statement
 // is executed, but the latter will not and could possibly cause overwriting
 // data in the same partition.
-SEASTAR_TEST_CASE(test_uuid_timeuuid_is_pure_issue) {
+// SEASTAR_TEST_CASE(test_uuid_timeuuid_is_pure_issue) {
+//     return do_with_cql_env_thread([] (cql_test_env& e) {
+//         BOOST_TEST_MESSAGE("timeuuid test");
+//         {
+//             e.execute_cql("CREATE TABLE test_timeuuid (pk timeuuid PRIMARY KEY)").get();
+//             auto insert_stmt = e.prepare("INSERT INTO test_timeuuid (pk) VALUES (currenttimeuuid()) IF NOT EXISTS").get();
+//             e.execute_prepared(insert_stmt, {}).get();
+//             sleep(1ms).get();
+//             // Check that the second execution of prepared insert statement
+//             // yields the same value for inserted `pk` and so doesn't produce
+//             // a different partition.
+//             e.execute_prepared(insert_stmt, {}).get();
+//             auto msg = e.execute_cql("SELECT * FROM test_timeuuid").get();
+//             assert_that(msg).is_rows().with_size(1);
+//         }
+//         BOOST_TEST_MESSAGE("uuid test");
+//         {
+//             e.execute_cql("CREATE TABLE test_uuid (pk uuid PRIMARY KEY)").get();
+//             auto insert_stmt = e.prepare("INSERT INTO test_uuid (pk) VALUES (uuid()) IF NOT EXISTS").get();
+//             e.execute_prepared(insert_stmt, {}).get();
+//             // Check that the second execution is evaluated again and yields a
+//             // different value for inserted `pk`.
+//             e.execute_prepared(insert_stmt, {}).get();
+//             auto msg = e.execute_cql("SELECT * FROM test_uuid").get();
+//             assert_that(msg).is_rows().with_size(2);
+//         }
+//     });
+// }
+
+// Non-deterministic CQL functions should be evaluated just before query execution.
+// Check that these functions (on the example of `uuid()`) work consistently both
+// for un-prepared and prepared statements for LWT queries (e.g. execution order
+// is correct and `bounce_to_shard` messages forward the same value for the execution
+// on another shard).
+//
+// Refs: #8604 (https://github.com/scylladb/scylla/issues/8604).
+SEASTAR_TEST_CASE(test_non_deterministic_fn_lwt_consistency) {
     return do_with_cql_env_thread([] (cql_test_env& e) {
-        BOOST_TEST_MESSAGE("timeuuid test");
-        {
-            e.execute_cql("CREATE TABLE test_timeuuid (pk timeuuid PRIMARY KEY)").get();
-            auto insert_stmt = e.prepare("INSERT INTO test_timeuuid (pk) VALUES (currenttimeuuid()) IF NOT EXISTS").get();
-            e.execute_prepared(insert_stmt, {}).get();
-            sleep(1ms).get();
-            // Check that the second execution of prepared insert statement
-            // yields the same value for inserted `pk` and so doesn't produce
-            // a different partition.
-            e.execute_prepared(insert_stmt, {}).get();
-            auto msg = e.execute_cql("SELECT * FROM test_timeuuid").get();
-            assert_that(msg).is_rows().with_size(1);
+        // Test that both unprepared and prepared statements yield the same results.
+        // The number of inserted rows should be exactly the same as the number
+        // of query executions to show that each time the function is evaluated
+        // again.
+        e.execute_cql("CREATE TABLE test_uuid (pk uuid PRIMARY KEY)").get();
+        auto drop_test_table = defer([&e] {
+            e.execute_cql("DROP TABLE test_uuid").get();
+        });
+        constexpr size_t insert_rows_num = 100;
+        std::string insert_stmt_str = "INSERT INTO test_uuid (pk) VALUES (uuid()) IF NOT EXISTS",
+            select_test_table_str = "SELECT * FROM test_uuid";
+        for (size_t i = 0; i < insert_rows_num; ++i) {
+            e.execute_cql(insert_stmt_str).get();
         }
-        BOOST_TEST_MESSAGE("uuid test");
-        {
-            e.execute_cql("CREATE TABLE test_uuid (pk uuid PRIMARY KEY)").get();
-            auto insert_stmt = e.prepare("INSERT INTO test_uuid (pk) VALUES (uuid()) IF NOT EXISTS").get();
+        auto tbl_rows_1 = e.execute_cql(select_test_table_str).get();
+        assert_that(tbl_rows_1).is_rows().with_size(insert_rows_num);
+
+        auto insert_stmt = e.prepare(insert_stmt_str).get();
+        for (size_t i = 0; i < insert_rows_num; ++i) {
             e.execute_prepared(insert_stmt, {}).get();
-            // Check that the second execution is evaluated again and yields a
-            // different value for inserted `pk`.
-            e.execute_prepared(insert_stmt, {}).get();
-            auto msg = e.execute_cql("SELECT * FROM test_uuid").get();
-            assert_that(msg).is_rows().with_size(2);
         }
+        auto tbl_rows_2 = e.execute_cql(select_test_table_str).get();
+        assert_that(tbl_rows_2).is_rows().with_size(insert_rows_num * 2);
     });
 }
