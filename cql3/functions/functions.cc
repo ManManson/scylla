@@ -459,6 +459,8 @@ uint64_t calculate_function_call_digest(const scalar_function& f, const std::vec
 
 cql3::raw_value_view
 function_call::bind_and_get(const query_options& options) {
+    static logging::logger smth_log("bind_and_get");
+
     std::vector<bytes_opt> buffers;
     buffers.reserve(_terms.size());
     for (auto&& t : _terms) {
@@ -474,9 +476,14 @@ function_call::bind_and_get(const query_options& options) {
     auto query_cached_fn_calls = options.cached_function_calls();
     auto cached_value_it = query_cached_fn_calls.find(call_id);
     if (query_cached_fn_calls.end() != cached_value_it) {
+
+        smth_log.info("bind_and_get cached value : {}", cached_value_it->second);
         return raw_value_view::make_temporary(raw_value::make_value(cached_value_it->second));
     }
     auto result = execute_internal(options.get_cql_serialization_format(), *_fun, std::move(buffers));
+    if (result) {
+        smth_log.info("bind_and_get calculate value: {}", *result);
+    }
     options.cache_function_call(call_id, result);
     return cql3::raw_value_view::make_temporary(cql3::raw_value::make_value(result));
 }

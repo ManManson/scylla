@@ -5002,6 +5002,48 @@ SEASTAR_TEST_CASE(test_user_based_sla_queries) {
 //     });
 // }
 
+static ::shared_ptr<cql_transport::messages::result_message> return_direct_on_shard(cql_test_env& e, const sstring& query,
+            db::consistency_level cl = db::consistency_level::ONE) {
+    auto execute = [&] () mutable {
+        return seastar::async([&] () mutable {
+            return e.execute_cql(query, q_serial_opts({}, cl)).get0();
+        });
+    };
+
+    auto msg = execute().get0();
+    if (!msg->move_to_shard()) {
+        return msg;
+    }
+    unsigned shard = *msg->move_to_shard();
+    testlog.info("[return_direct_on_shard]: redirected to shard {}", shard);
+    return smp::submit_to(shard, std::move(execute)).get();
+}
+
+static ::shared_ptr<cql_transport::messages::result_message> return_prepared_on_shard(cql_test_env& e, const sstring& query,
+            std::vector<bytes> params,
+            db::consistency_level cl = db::consistency_level::ONE) {
+    auto execute = [&] () mutable {
+        return seastar::async([&] () mutable {
+            auto id = e.prepare(query).get0();
+
+            std::vector<cql3::raw_value> raw_values;
+            for (auto& param : params) {
+                raw_values.emplace_back(cql3::raw_value::make_value(param));
+            }
+
+            auto qo = q_serial_opts(std::move(raw_values), cl);
+            return e.execute_prepared_with_qo(id, std::move(qo)).get0();
+        });
+    };
+
+    auto msg = execute().get0();
+    if (!msg->move_to_shard()) {
+        return msg;
+    }
+    unsigned shard = *msg->move_to_shard();
+    return smp::submit_to(shard, std::move(execute)).get();
+}
+
 // Non-deterministic CQL functions should be evaluated just before query execution.
 // Check that these functions (on the example of `uuid()`) work consistently both
 // for un-prepared and prepared statements for LWT queries (e.g. execution order
@@ -5013,8 +5055,8 @@ SEASTAR_TEST_CASE(test_non_deterministic_fn_lwt_consistency) {
     return do_with_cql_env_thread([] (cql_test_env& e) {
         // Test that both unprepared and prepared statements yield the same results.
         // The number of inserted rows should be exactly the same as the number
-        // of query executions to show that each time the function is evaluated
-        // again.
+        // of query executions to show that each time the function yields
+        // a different value.
         e.execute_cql("CREATE TABLE test_uuid (pk uuid PRIMARY KEY)").get();
         auto drop_test_table = defer([&e] {
             e.execute_cql("DROP TABLE test_uuid").get();
@@ -5022,15 +5064,27 @@ SEASTAR_TEST_CASE(test_non_deterministic_fn_lwt_consistency) {
         constexpr size_t insert_rows_num = 100;
         std::string insert_stmt_str = "INSERT INTO test_uuid (pk) VALUES (uuid()) IF NOT EXISTS",
             select_test_table_str = "SELECT * FROM test_uuid";
+        BOOST_TEST_CHECKPOINT("Inserting " << insert_rows_num << " rows via unprepared query");
         for (size_t i = 0; i < insert_rows_num; ++i) {
-            e.execute_cql(insert_stmt_str).get();
+            BOOST_TEST_CHECKPOINT("Inserting  i-th " << i);
+            // not interested in return value
+            auto msg = return_direct_on_shard(e, insert_stmt_str);
+            auto& msg_ref = *msg;
+            testlog.info("typeid msg {}", typeid(msg_ref).name());
+            assert_that(msg).is_rows().with_row({boolean_type->decompose(true), std::nullopt});
         }
+        testlog.info("rows from select:");
         auto tbl_rows_1 = e.execute_cql(select_test_table_str).get();
+        const auto& rs = dynamic_pointer_cast<cql_transport::messages::result_message::rows>(tbl_rows_1)->rs().result_set();
+        for (auto&& row : rs.rows()) {
+            testlog.info("{}", *row[0]);
+        }
         assert_that(tbl_rows_1).is_rows().with_size(insert_rows_num);
 
-        auto insert_stmt = e.prepare(insert_stmt_str).get();
+        BOOST_TEST_CHECKPOINT("Inserting another " << insert_rows_num << " rows via prepared query");
         for (size_t i = 0; i < insert_rows_num; ++i) {
-            e.execute_prepared(insert_stmt, {}).get();
+            // not interested in return value
+            (void)return_prepared_on_shard(e, insert_stmt_str, {});
         }
         auto tbl_rows_2 = e.execute_cql(select_test_table_str).get();
         assert_that(tbl_rows_2).is_rows().with_size(insert_rows_num * 2);
