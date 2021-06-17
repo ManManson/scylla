@@ -53,9 +53,16 @@ namespace functions {
 class function_call : public non_terminal {
     const shared_ptr<scalar_function> _fun;
     const std::vector<shared_ptr<term>> _terms;
+    // 0-based index of the function call within a CQL statement.
+    // Used to populate the cache of execution results while passing to
+    // another shard (handling `bounce_to_shard` messages) in LWT statements.
+    uint8_t _id;
+    // This flag is set to `true` if the `function_call` AST element
+    // is a part of LWT statement.
+    bool _in_lwt_context;
 public:
-    function_call(shared_ptr<scalar_function> fun, std::vector<shared_ptr<term>> terms)
-            : _fun(std::move(fun)), _terms(std::move(terms)) {
+    function_call(shared_ptr<scalar_function> fun, std::vector<shared_ptr<term>> terms, uint8_t id, bool in_lwt_context)
+            : _fun(std::move(fun)), _terms(std::move(terms)), _id(id), _in_lwt_context(in_lwt_context) {
     }
     virtual void collect_marker_specification(variable_specifications& bound_names) const override;
     virtual shared_ptr<terminal> bind(const query_options& options) override;
@@ -70,11 +77,21 @@ public:
     class raw : public term::raw {
         function_name _name;
         std::vector<shared_ptr<term::raw>> _terms;
+        // 0-based index of the function call within a CQL statement.
+        // Used to populate the cache of execution results while passing to
+        // another shard (handling `bounce_to_shard` messages) in LWT statements.
+        uint8_t _id;
+        // This flag is set to `true` if the `function_call` AST element
+        // is a part of LWT statement.
+        bool _in_lwt_context = false;
     public:
-        raw(function_name name, std::vector<shared_ptr<term::raw>> terms)
-            : _name(std::move(name)), _terms(std::move(terms)) {
+        raw(function_name name, std::vector<shared_ptr<term::raw>> terms, uint8_t id)
+            : _name(std::move(name)), _terms(std::move(terms)), _id(id) {
         }
         virtual ::shared_ptr<term> prepare(database& db, const sstring& keyspace, lw_shared_ptr<column_specification> receiver) const override;
+        // Specify that this AST element is a part of LWT statement. Gets called
+        // by CQL parser immediately after parsing a statement.
+        void set_lwt_context() { _in_lwt_context = true; }
     private:
         // All parameters must be terminal
         static bytes_opt execute(scalar_function& fun, std::vector<shared_ptr<term>> parameters);

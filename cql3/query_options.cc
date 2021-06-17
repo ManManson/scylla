@@ -191,4 +191,20 @@ db::consistency_level query_options::check_serial_consistency() const {
     throw exceptions::protocol_exception("Consistency level for LWT is missing for a request with conditions");
 }
 
+void query_options::cache_function_call(uint8_t id, bytes_opt value) const {
+    _cached_fn_calls.emplace(id, value);
+}
+
+const std::unordered_map<uint8_t, bytes_opt>& query_options::cached_function_calls() const {
+    return _cached_fn_calls;
+}
+
+std::unordered_map<uint8_t, bytes_opt>&& query_options::take_cached_function_calls() {
+    return std::move(_cached_fn_calls);
+}
+
+void query_options::set_cached_function_calls(std::unordered_map<uint8_t, bytes_opt> vals) {
+    _cached_fn_calls = std::move(vals);
+}
+
 }

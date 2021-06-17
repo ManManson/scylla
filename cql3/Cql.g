@@ -150,6 +150,9 @@ struct uninitialized {
 
     std::vector<::shared_ptr<cql3::column_identifier>> _bind_variables;
     std::vector<std::unique_ptr<TokenType>> _missing_tokens;
+    uint8_t _fn_call_id = 0;
+    bool is_lwt_statement = false;
+    std::vector<::shared_ptr<cql3::functions::function_call::raw>> _fn_calls;
 
     // Can't use static variable, since it needs to be defined out-of-line
     static const std::unordered_set<sstring>& _reserved_type_names() {
@@ -329,7 +332,15 @@ struct uninitialized {
 /** STATEMENTS **/
 
 query returns [std::unique_ptr<raw::parsed_statement> stmnt]
-    : st=cqlStatement (';')* EOF { $stmnt = std::move(st); }
+    : st=cqlStatement (';')* EOF
+        {
+            if (is_lwt_statement) {
+                for (auto& fn_call : _fn_calls) {
+                    fn_call->set_lwt_context();
+                }
+            }
+            $stmnt = std::move(st);
+        }
     ;
 
 cqlStatement returns [std::unique_ptr<raw::parsed_statement> stmt]
@@ -508,7 +519,7 @@ insertStatement returns [std::unique_ptr<raw::modification_statement> expr]
         ('(' c1=cident { column_names.push_back(c1); }  ( ',' cn=cident { column_names.push_back(cn); } )* ')'
             K_VALUES
             '(' v1=term { values.push_back(v1); } ( ',' vn=term { values.push_back(vn); } )* ')'
-            ( K_IF K_NOT K_EXISTS { if_not_exists = true; } )?
+            ( K_IF K_NOT K_EXISTS { if_not_exists = true; is_lwt_statement = true; } )?
             ( usingClause[attrs] )?
               {
               $expr = std::make_unique<raw::insert_statement>(std::move(cf),
@@ -520,7 +531,7 @@ insertStatement returns [std::unique_ptr<raw::modification_statement> expr]
         | K_JSON
           json_token=jsonValue { json_value = $json_token.value; }
             ( K_DEFAULT K_UNSET { default_unset = true; } | K_DEFAULT K_NULL )?
-            ( K_IF K_NOT K_EXISTS { if_not_exists = true; } )?
+            ( K_IF K_NOT K_EXISTS { if_not_exists = true; is_lwt_statement = true; } )?
             ( usingClause[attrs] )?
               {
               $expr = std::make_unique<raw::insert_json_statement>(std::move(cf),
@@ -560,6 +571,7 @@ updateStatement returns [std::unique_ptr<raw::update_statement> expr]
       K_WHERE wclause=whereClause
       ( K_IF (K_EXISTS{ if_exists = true; } | conditions=updateConditions) )?
       {
+          is_lwt_statement = if_exists || !conditions.empty();
           return std::make_unique<raw::update_statement>(std::move(cf),
                                                   std::move(attrs),
                                                   std::move(operations),
@@ -592,6 +604,7 @@ deleteStatement returns [std::unique_ptr<raw::delete_statement> expr]
       K_WHERE wclause=whereClause
       ( K_IF ( K_EXISTS { if_exists = true; } | conditions=updateConditions ))?
       {
+          is_lwt_statement = if_exists || !conditions.empty();
           return std::make_unique<raw::delete_statement>(cf,
                                             std::move(attrs),
                                             std::move(column_deletions),
@@ -1517,7 +1530,11 @@ functionArgs returns [std::vector<shared_ptr<cql3::term::raw>> a]
 
 term returns [::shared_ptr<cql3::term::raw> term1]
     : v=value                          { $term1 = v; }
-    | f=functionName args=functionArgs { $term1 = ::make_shared<cql3::functions::function_call::raw>(std::move(f), std::move(args)); }
+    | f=functionName args=functionArgs
+        {
+            $term1 = ::make_shared<cql3::functions::function_call::raw>(std::move(f), std::move(args), _fn_call_id++);
+            _fn_calls.push_back(static_pointer_cast<cql3::functions::function_call::raw>($term1));
+        }
     | '(' c=comparatorType ')' t=term  { $term1 = make_shared<cql3::type_cast>(c, t); }
     ;
 

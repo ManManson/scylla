@@ -454,7 +454,26 @@ function_call::bind_and_get(const query_options& options) {
         }
         buffers.push_back(std::move(to_bytes_opt(val)));
     }
+    if (_in_lwt_context && !_fun->is_pure()) {
+        // Populate the cache only for LWT statements. Note that this code
+        // works only in places where `function_call::raw` AST nodes are
+        // created.
+        // These cases do not include selection clause in SELECT statement,
+        // hence no database inputs are possibly allowed to the functions
+        // evaluated here.
+        // We can cache every non-deterministic call here as this code branch
+        // acts the same way as if all arguments are equivalent to literal
+        // values at this point (already calculated).
+        auto query_cached_fn_calls = options.cached_function_calls();
+        auto cached_value_it = query_cached_fn_calls.find(_id);
+        if (query_cached_fn_calls.end() != cached_value_it) {
+            return raw_value_view::make_temporary(raw_value::make_value(cached_value_it->second));
+        }
+    }
     auto result = execute_internal(options.get_cql_serialization_format(), *_fun, std::move(buffers));
+    if (_in_lwt_context && !_fun->is_pure()) {
+        options.cache_function_call(_id, result);
+    }
     return cql3::raw_value_view::make_temporary(cql3::raw_value::make_value(result));
 }
 
@@ -558,7 +577,7 @@ function_call::raw::prepare(database& db, const sstring& keyspace, lw_shared_ptr
     if (all_terminal && scalar_fun->is_pure()) {
         return make_terminal(scalar_fun, cql3::raw_value::make_value(execute(*scalar_fun, parameters)), query_options::DEFAULT.get_cql_serialization_format());
     } else {
-        return ::make_shared<function_call>(scalar_fun, parameters);
+        return ::make_shared<function_call>(scalar_fun, parameters, _id, _in_lwt_context);
     }
 }
 
