@@ -885,7 +885,7 @@ cql_server::connection::process(uint16_t stream, request_reader in, service::cli
             _version, _cql_serialization_format, permit, trace_state, true, {}) // FIXME: pass only map
             .then([stream, &client_state, this, is, permit, process_fn, trace_state]
                    (process_fn_return_type msg) mutable {
-        shared_ptr<messages::result_message::bounce_to_shard>* bounce_msg = std::get_if<shared_ptr<messages::result_message::bounce_to_shard>>(&msg);
+        auto* bounce_msg = std::get_if<shared_ptr<messages::result_message::bounce_to_shard>>(&msg);
         if (bounce_msg) {
             return process_on_shard(*bounce_msg, stream, is, client_state, std::move(permit), trace_state, process_fn);
         }
