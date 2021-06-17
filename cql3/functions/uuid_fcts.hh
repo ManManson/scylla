@@ -45,10 +45,6 @@
 #include "native_scalar_function.hh"
 #include "utils/UUID.hh"
 
-#include "log.hh"
-
-inline logging::logger uuid_log("uuid_log");
-
 namespace cql3 {
 
 namespace functions {
@@ -58,9 +54,7 @@ shared_ptr<function>
 make_uuid_fct() {
     return make_native_scalar_function<false>("uuid", uuid_type, {},
             [] (cql_serialization_format sf, const std::vector<bytes_opt>& parameters) -> bytes_opt {
-        auto res = utils::make_random_uuid();
-        uuid_log.info("execute uuid(): {}", res);
-        return {uuid_type->decompose(res)};
+        return {uuid_type->decompose(utils::make_random_uuid())};
     });
 }
 
