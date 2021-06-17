@@ -203,8 +203,4 @@ void query_options::set_cached_function_calls(std::unordered_map<uint64_t, bytes
     _cached_fn_calls = std::move(vals);
 }
 
-void query_options::append_cached_function_calls(std::unordered_map<uint64_t, bytes_opt> vals) const {
-    _cached_fn_calls.insert(vals.begin(), vals.end());
-}
-
 }

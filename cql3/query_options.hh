@@ -284,7 +284,6 @@ public:
     void cache_function_call(uint64_t id, bytes_opt value) const;
     const std::unordered_map<uint64_t, bytes_opt>& cached_function_calls() const;
     void set_cached_function_calls(std::unordered_map<uint64_t, bytes_opt> vals);
-    void append_cached_function_calls(std::unordered_map<uint64_t, bytes_opt> vals) const;
 
 private:
     void fill_value_views();
