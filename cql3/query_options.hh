@@ -91,6 +91,26 @@ private:
     // 2) monotonic
     // 3) unique.
     mutable int _list_append_seq = 0;
+
+    // Cached `function_call` evaluation results. `function_call` AST nodes
+    // are created for each function with side effects in a CQL query, i.e.
+    // non-deterministic functions (`uuid()`, `now()` and some others
+    // timeuuid-related).
+    //
+    // These nodes are evaluated either when a query itself is executed
+    // or query restrictions are computed (e.g. partition/clustering
+    // key ranges for LWT requests).
+    //
+    // We need to cache the calls since otherwise when handling a
+    // `bounce_to_shard` request for an LWT query, we can possibly enter an
+    // infinite bouncing loop (in case a function is used to calculate
+    // partition key ranges for a query), since the results can be different
+    // each time. Furthermore, we don't support bouncing more than one time.
+    // Refs: #8604 (https://github.com/scylladb/scylla/issues/8604)
+    //
+    // FIXME: mutable is a hack! `query_state` is not available at
+    // evaluation sites and we only have a const reference to `query_options`.
+    mutable std::unordered_map<uint64_t, bytes_opt> _cached_fn_calls;
 private:
     /**
      * @brief Batch query_options constructor.
@@ -276,6 +296,12 @@ public:
     }
 
     void prepare(const std::vector<lw_shared_ptr<column_specification>>& specs);
+
+    // FIXME: should be non-const since it's mutating internals!
+    void cache_function_call(uint64_t id, bytes_opt value) const;
+    const std::unordered_map<uint64_t, bytes_opt>& cached_function_calls() const;
+    void set_cached_function_calls(std::unordered_map<uint64_t, bytes_opt> vals);
+
 private:
     void fill_value_views();
 };
