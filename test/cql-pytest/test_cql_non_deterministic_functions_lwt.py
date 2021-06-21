@@ -15,33 +15,55 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with Scylla.  If not, see <http://www.gnu.org/licenses/>.
 
+#############################################################################
+# Non-deterministic CQL functions should be evaluated just before query
+# execution.
+# Check that these functions (e.g. `now()`, `uuid()` and `current*()`) work
+# consistently both for un-prepared and prepared statements for LWT queries
+# (e.g. execution order is correct and `bounce_to_shard` messages forward the
+# same value for the execution on another shard).
+# Refs: #8604 (https://github.com/scylladb/scylla/issues/8604).
+#############################################################################
+
+from time import sleep
 from util import new_test_table
 
-def test_uuid_fn_pk_insert(cql, test_keyspace):
-    '''Non-deterministic CQL functions should be evaluated just before query execution.
-       Check that these functions (on the example of `uuid()`) work consistently both
-       for un-prepared and prepared statements for LWT queries (e.g. execution order
-       is correct and `bounce_to_shard` messages forward the same value for the execution
-       on another shard).
-       Refs: #8604 (https://github.com/scylladb/scylla/issues/8604).
-    '''
-    with new_test_table(cql, test_keyspace, "pk uuid PRIMARY KEY") as table:
+def nondeterm_fn_repeated_execute(cql, test_keyspace, pk_type, fn):
+    with new_test_table(cql, test_keyspace, f"pk {pk_type} PRIMARY KEY") as table:
         # Test that both unprepared and prepared statements yield the same results.
         # The number of inserted rows should be exactly the same as the number
         # of query executions to show that each time the function yields
-        # a different value.
+        # a different value (sleep 1ms to make sure time-dependent functions
+        # demonstrate correct behavior).
 
-        insert_str = f"INSERT INTO {table} (pk) VALUES (uuid())"
+        insert_str = f"INSERT INTO {table} (pk) VALUES ({fn}())"
         select_str = f"SELECT * FROM {table}"
         num_iterations = 100
 
         for i in range(num_iterations):
             cql.execute(insert_str)
+            sleep(0.001)
         rows = list(cql.execute(select_str))
         assert len(rows) == num_iterations
 
         insert_stmt = cql.prepare(insert_str)
         for i in range(num_iterations):
             cql.execute(insert_stmt, [])
+            sleep(0.001)
         rows = list(cql.execute(select_str))
         assert len(rows) == num_iterations * 2
+
+def test_uuid_fn_pk_insert(cql, test_keyspace):
+    nondeterm_fn_repeated_execute(cql, test_keyspace, "uuid", "uuid")
+
+def test_currenttimestamp_fn_pk_insert(cql, test_keyspace):
+    nondeterm_fn_repeated_execute(cql, test_keyspace, "timestamp", "currenttimestamp")
+
+def test_currenttime_fn_pk_insert(cql, test_keyspace):
+    nondeterm_fn_repeated_execute(cql, test_keyspace, "time", "currenttime")
+
+def test_currenttimeuuid_fn_pk_insert(cql, test_keyspace):
+    nondeterm_fn_repeated_execute(cql, test_keyspace, "timeuuid", "currenttimeuuid")
+
+def test_now_fn_pk_insert(cql, test_keyspace):
+    nondeterm_fn_repeated_execute(cql, test_keyspace, "timeuuid", "now")
