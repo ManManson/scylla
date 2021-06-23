@@ -42,7 +42,6 @@ logging::logger rslog("raft_services");
 raft_services::raft_services(netw::messaging_service& ms, gms::gossiper& gs, sharded<cql3::query_processor>& qp)
     : _ms(ms), _gossiper(gs), _qp(qp), _fd(make_shared<raft_gossip_failure_detector>(gs, *this))
 {
-    (void) _gossiper;
 }
 
 void raft_services::init_rpc_verbs() {
@@ -194,7 +193,7 @@ future<> raft_services::stop_servers() {
 seastar::future<> raft_services::init() {
     // Load or initialize a Raft server id. Avoid races on
     // different shards by always querying shard 0.
-    _my_addr = co_await container().invoke_on(0, [] (raft_services& self) -> future<raft::server_address> {
+    _my_addr = co_await container().invoke_on(0, [] (raft_services& self) {
         return with_semaphore(self._my_addr_sem, 1, [&self] () -> future<raft::server_address> {
             // Workaround for https://gcc.gnu.org/bugzilla/show_bug.cgi?id=95111
             auto self_ptr = &self;
