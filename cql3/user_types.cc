@@ -191,7 +191,7 @@ void user_types::delayed_value::collect_marker_specification(variable_specificat
     }
 }
 
-std::vector<managed_bytes_opt> user_types::delayed_value::bind_internal(const query_options& options) {
+std::vector<managed_bytes_opt> user_types::delayed_value::bind_internal(const query_options& options, service::query_state& qs) {
     auto sf = options.get_cql_serialization_format();
 
     // user_types::literal::prepare makes sure that every field gets a corresponding value.
@@ -200,7 +200,7 @@ std::vector<managed_bytes_opt> user_types::delayed_value::bind_internal(const qu
 
     std::vector<managed_bytes_opt> buffers;
     for (size_t i = 0; i < _type->size(); ++i) {
-        const auto& value = _values[i]->bind_and_get(options);
+        const auto& value = _values[i]->bind_and_get(options, qs);
         if (!_type->is_multi_cell() && value.is_unset_value()) {
             throw exceptions::invalid_request_exception(format("Invalid unset value for field '{}' of user defined type {}",
                         _type->field_name_as_string(i), _type->get_name_as_string()));
@@ -218,12 +218,12 @@ std::vector<managed_bytes_opt> user_types::delayed_value::bind_internal(const qu
     return buffers;
 }
 
-shared_ptr<terminal> user_types::delayed_value::bind(const query_options& options) {
-    return ::make_shared<user_types::value>(bind_internal(options));
+shared_ptr<terminal> user_types::delayed_value::bind(const query_options& options, service::query_state& qs) {
+    return ::make_shared<user_types::value>(bind_internal(options, qs));
 }
 
-cql3::raw_value_view user_types::delayed_value::bind_and_get(const query_options& options) {
-    return cql3::raw_value_view::make_temporary(cql3::raw_value::make_value(user_type_impl::build_value_fragmented(bind_internal(options))));
+cql3::raw_value_view user_types::delayed_value::bind_and_get(const query_options& options, service::query_state& qs) {
+    return cql3::raw_value_view::make_temporary(cql3::raw_value::make_value(user_type_impl::build_value_fragmented(bind_internal(options, qs))));
 }
 
 shared_ptr<terminal> user_types::marker::bind(const query_options& options) {
@@ -295,10 +295,10 @@ void user_types::setter::execute(mutation& m, const clustering_key_prefix& row_k
     }
 }
 
-void user_types::setter_by_field::execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params) {
+void user_types::setter_by_field::execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params, service::query_state& qs) {
     assert(column.type->is_user_type() && column.type->is_multi_cell());
 
-    auto value = _t->bind_and_get(params._options);
+    auto value = _t->bind_and_get(params._options, qs);
     if (value.is_unset_value()) {
         return;
     }

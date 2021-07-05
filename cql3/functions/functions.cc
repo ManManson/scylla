@@ -437,18 +437,18 @@ function_call::collect_marker_specification(variable_specifications& bound_names
 }
 
 shared_ptr<terminal>
-function_call::bind(const query_options& options) {
-    return make_terminal(_fun, cql3::raw_value::make_value(bind_and_get(options)), options.get_cql_serialization_format());
+function_call::bind(const query_options& options, service::query_state&) {
+    return make_terminal(_fun, cql3::raw_value::make_value(bind_and_get(options, qs)), options.get_cql_serialization_format());
 }
 
 cql3::raw_value_view
-function_call::bind_and_get(const query_options& options) {
+function_call::bind_and_get(const query_options& options, service::query_state& qs) {
     std::vector<bytes_opt> buffers;
     buffers.reserve(_terms.size());
     for (auto&& t : _terms) {
         // For now, we don't allow nulls as argument as no existing function needs it and it
         // simplify things.
-        auto val = t->bind_and_get(options);
+        auto val = t->bind_and_get(options, qs);
         if (!val) {
             throw exceptions::invalid_request_exception(format("Invalid null value for argument to {}", *_fun));
         }

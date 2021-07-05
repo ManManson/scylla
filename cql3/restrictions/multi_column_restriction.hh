@@ -206,8 +206,8 @@ public:
             get_columns_in_commons(other)));
     }
 
-    virtual std::vector<bounds_range_type> bounds_ranges(const query_options& options) const override {
-        return { bounds_range_type::make_singular(composite_value(options)) };
+    virtual std::vector<bounds_range_type> bounds_ranges(const query_options& options, service::query_state& qs) const override {
+        return { bounds_range_type::make_singular(composite_value(options, qs)) };
     }
 
 #if 0
@@ -218,8 +218,8 @@ public:
     }
 #endif
 
-    clustering_key_prefix composite_value(const query_options& options) const {
-        auto t = static_pointer_cast<tuples::value>(_value->bind(options));
+    clustering_key_prefix composite_value(const query_options& options, service::query_state& qs) const {
+        auto t = static_pointer_cast<tuples::value>(_value->bind(options, qs));
         auto values = t->get_elements();
         std::vector<managed_bytes> components;
         for (unsigned i = 0; i < values.size(); i++) {
@@ -263,7 +263,7 @@ public:
         return false;
     }
 
-    virtual std::vector<bounds_range_type> bounds_ranges(const query_options& options) const override {
+    virtual std::vector<bounds_range_type> bounds_ranges(const query_options& options, service::query_state&) const override {
         auto split_in_values = split_values(options);
         std::vector<bounds_range_type> bounds;
         for (auto&& components : split_in_values) {
@@ -405,11 +405,11 @@ public:
         return false;
     }
 
-    virtual std::vector<bounds_range_type> bounds_ranges(const query_options& options) const override {
+    virtual std::vector<bounds_range_type> bounds_ranges(const query_options& options, service::query_state& qs) const override {
         if (_mode == mode::clustering || !is_mixed_order()) {
             return bounds_ranges_unified_order(options);
         } else {
-            return bounds_ranges_mixed_order(options);
+            return bounds_ranges_mixed_order(options, qs);
         }
     }
 #if 0
@@ -511,12 +511,12 @@ private:
      * @param options the query options
      * @return the vector of ranges for the restriction
      */
-    std::vector<bounds_range_type> bounds_ranges_mixed_order(const query_options& options) const {
+    std::vector<bounds_range_type> bounds_ranges_mixed_order(const query_options& options, service::query_state& qs) const {
         std::vector<bounds_range_type> ret_ranges;
         auto mixed_order_restrictions = build_mixed_order_restriction_set(options);
         ret_ranges.reserve(mixed_order_restrictions.size());
         for (auto r : mixed_order_restrictions) {
-            for (auto&& range : r->bounds_ranges(options)) {
+            for (auto&& range : r->bounds_ranges(options, qs)) {
                 ret_ranges.emplace_back(std::move(range));
             }
         }

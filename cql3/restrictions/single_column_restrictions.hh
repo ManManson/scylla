@@ -102,12 +102,12 @@ public:
         return r;
     }
 
-    virtual bytes_opt value_for(const column_definition& cdef, const query_options& options) const override {
+    virtual bytes_opt value_for(const column_definition& cdef, const query_options& options, service::query_state& qs) const override {
         auto it = _restrictions.find(std::addressof(cdef));
         if (it == _restrictions.end()) {
             return bytes_opt{};
         } else {
-            const auto values = std::get<expr::value_list>(possible_lhs_values(&cdef, it->second->expression, options));
+            const auto values = std::get<expr::value_list>(possible_lhs_values(&cdef, it->second->expression, options, qs));
             if (values.empty()) {
                 return bytes_opt{};
             }

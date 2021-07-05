@@ -149,7 +149,7 @@ public:
 
     const sstring& column_family() const;
 
-    query::partition_slice make_partition_slice(const query_options& options) const;
+    query::partition_slice make_partition_slice(const query_options& options, service::query_state&) const;
 
     ::shared_ptr<restrictions::statement_restrictions> get_restrictions() const;
 
@@ -312,11 +312,11 @@ private:
             db::timeout_clock::time_point timeout,
             bool include_base_clustering_key) const;
 
-    dht::partition_range_vector get_partition_ranges_for_local_index_posting_list(const query_options& options) const;
+    dht::partition_range_vector get_partition_ranges_for_local_index_posting_list(const query_options& options, service::query_state&) const;
     dht::partition_range_vector get_partition_ranges_for_global_index_posting_list(const query_options& options) const;
 
-    query::partition_slice get_partition_slice_for_local_index_posting_list(const query_options& options) const;
-    query::partition_slice get_partition_slice_for_global_index_posting_list(const query_options& options) const;
+    query::partition_slice get_partition_slice_for_local_index_posting_list(const query_options& options, service::query_state&) const;
+    query::partition_slice get_partition_slice_for_global_index_posting_list(const query_options& options, service::query_state&) const;
 
     bytes compute_idx_token(const partition_key& key) const;
 };

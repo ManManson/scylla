@@ -155,7 +155,7 @@ using value_set = std::variant<value_list, nonwrapping_range<managed_bytes>>;
 /// - `A=1 AND A<=0` restricts A to an empty list; no value is able to satisfy the expression
 /// - `A>=NULL` also restricts A to an empty list; all comparisons to NULL are false
 /// - an expression without A "restricts" A to unbounded range
-extern value_set possible_lhs_values(const column_definition*, const expression&, const query_options&);
+extern value_set possible_lhs_values(const column_definition*, const expression&, const query_options&, service::query_state&);
 
 /// Turns value_set into a range, unless it's a multi-valued list (in which case this throws).
 extern nonwrapping_range<managed_bytes> to_range(const value_set&);

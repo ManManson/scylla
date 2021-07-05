@@ -201,8 +201,8 @@ public:
     void build_cas_result_set_metadata();
 
 public:
-    virtual dht::partition_range_vector build_partition_keys(const query_options& options, const json_cache_opt& json_cache) const;
-    virtual query::clustering_row_ranges create_clustering_ranges(const query_options& options, const json_cache_opt& json_cache) const;
+    virtual dht::partition_range_vector build_partition_keys(const query_options& options, const json_cache_opt& json_cache, service::query_state&) const;
+    virtual query::clustering_row_ranges create_clustering_ranges(const query_options& options, const json_cache_opt& json_cache, service::query_state&) const;
 
 private:
     // Return true if this statement doesn't update or read any regular rows, only static rows.
@@ -284,7 +284,7 @@ public:
      */
     future<std::vector<mutation>> get_mutations(service::storage_proxy& proxy, const query_options& options, db::timeout_clock::time_point timeout, bool local, int64_t now, service::query_state& qs) const;
 
-    virtual json_cache_opt maybe_prepare_json_cache(const query_options& options) const;
+    virtual json_cache_opt maybe_prepare_json_cache(const query_options& options, service::query_state&) const;
 protected:
     /**
      * If there are conditions on the statement, this is called after the where clause and conditions have been

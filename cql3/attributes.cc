@@ -66,12 +66,12 @@ bool attributes::is_timeout_set() const {
     return bool(_timeout);
 }
 
-int64_t attributes::get_timestamp(int64_t now, const query_options& options) {
+int64_t attributes::get_timestamp(int64_t now, const query_options& options, service::query_state& qs) {
     if (!_timestamp) {
         return now;
     }
 
-    auto tval = _timestamp->bind_and_get(options);
+    auto tval = _timestamp->bind_and_get(options, qs);
     if (tval.is_null()) {
         throw exceptions::invalid_request_exception("Invalid null value of timestamp");
     }
@@ -85,11 +85,11 @@ int64_t attributes::get_timestamp(int64_t now, const query_options& options) {
     }
 }
 
-int32_t attributes::get_time_to_live(const query_options& options) {
+int32_t attributes::get_time_to_live(const query_options& options, service::query_state& qs) {
     if (!_time_to_live)
         return 0;
 
-    auto tval = _time_to_live->bind_and_get(options);
+    auto tval = _time_to_live->bind_and_get(options, qs);
     if (tval.is_null()) {
         throw exceptions::invalid_request_exception("Invalid null value of TTL");
     }
@@ -118,8 +118,8 @@ int32_t attributes::get_time_to_live(const query_options& options) {
 }
 
 
-db::timeout_clock::duration attributes::get_timeout(const query_options& options) const {
-    auto timeout = _timeout->bind_and_get(options);
+db::timeout_clock::duration attributes::get_timeout(const query_options& options, service::query_state& qs) const {
+    auto timeout = _timeout->bind_and_get(options, qs);
     if (timeout.is_null() || timeout.is_unset_value()) {
         throw exceptions::invalid_request_exception("Timeout value cannot be unset/null");
     }

@@ -139,9 +139,9 @@ future<> modification_statement::check_access(service::storage_proxy& proxy, con
 future<std::vector<mutation>>
 modification_statement::get_mutations(service::storage_proxy& proxy, const query_options& options, db::timeout_clock::time_point timeout, bool local, int64_t now, service::query_state& qs) const {
     auto cl = options.get_consistency();
-    auto json_cache = maybe_prepare_json_cache(options);
-    auto keys = build_partition_keys(options, json_cache);
-    auto ranges = create_clustering_ranges(options, json_cache);
+    auto json_cache = maybe_prepare_json_cache(options, qs);
+    auto keys = build_partition_keys(options, json_cache, qs);
+    auto ranges = create_clustering_ranges(options, json_cache, qs);
     auto f = make_ready_future<update_parameters::prefetch_data>(s);
 
     if (is_counter()) {
@@ -241,13 +241,13 @@ modification_statement::read_command(service::storage_proxy& proxy, query::clust
 }
 
 std::vector<query::clustering_range>
-modification_statement::create_clustering_ranges(const query_options& options, const json_cache_opt& json_cache) const {
-    return _restrictions->get_clustering_bounds(options);
+modification_statement::create_clustering_ranges(const query_options& options, const json_cache_opt& json_cache, service::query_state& qs) const {
+    return _restrictions->get_clustering_bounds(options, qs);
 }
 
 dht::partition_range_vector
-modification_statement::build_partition_keys(const query_options& options, const json_cache_opt& json_cache) const {
-    auto keys = _restrictions->get_partition_key_ranges(options);
+modification_statement::build_partition_keys(const query_options& options, const json_cache_opt& json_cache, service::query_state& qs) const {
+    auto keys = _restrictions->get_partition_key_ranges(options, qs);
     for (auto const& k : keys) {
         validation::validate_cql_key(*s, *k.start()->value().key());
     }
@@ -316,9 +316,9 @@ modification_statement::execute_with_condition(service::storage_proxy& proxy, se
     auto cas_timeout = now + cfg.cas_timeout;         // When to give up due to contention.
     auto read_timeout = now + cfg.read_timeout;       // When to give up on query.
 
-    json_cache_opt json_cache = maybe_prepare_json_cache(options);
-    std::vector<dht::partition_range> keys = build_partition_keys(options, json_cache);
-    std::vector<query::clustering_range> ranges = create_clustering_ranges(options, json_cache);
+    json_cache_opt json_cache = maybe_prepare_json_cache(options, qs);
+    std::vector<dht::partition_range> keys = build_partition_keys(options, json_cache, qs);
+    std::vector<query::clustering_range> ranges = create_clustering_ranges(options, json_cache, qs);
 
     if (keys.empty()) {
         throw exceptions::invalid_request_exception(format("Unrestricted partition key in a conditional {}",
@@ -661,7 +661,7 @@ void modification_statement::validate_where_clause_for_conditions() const {
     }
 }
 
-modification_statement::json_cache_opt modification_statement::maybe_prepare_json_cache(const query_options& options) const {
+modification_statement::json_cache_opt modification_statement::maybe_prepare_json_cache(const query_options& options, service::query_state&) const {
     return {};
 }
 

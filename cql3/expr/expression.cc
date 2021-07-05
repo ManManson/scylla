@@ -111,7 +111,7 @@ struct column_value_eval_bag {
 
 /// Returns col's value from queried data.
 managed_bytes_opt get_value_from_partition_slice(
-        const column_value& col, row_data_from_partition_slice data, const query_options& options) {
+        const column_value& col, row_data_from_partition_slice data, const query_options& options, service::query_state& qs) {
     auto cdef = col.col;
     if (col.sub) {
         auto col_type = static_pointer_cast<const collection_type_impl>(cdef->type);
@@ -120,7 +120,7 @@ managed_bytes_opt get_value_from_partition_slice(
         }
         const auto deserialized = cdef->type->deserialize(managed_bytes_view(*data.other_columns[data.sel.index_of(*cdef)]));
         const auto& data_map = value_cast<map_type_impl::native_type>(deserialized);
-        const auto key = col.sub->bind_and_get(options);
+        const auto key = col.sub->bind_and_get(options, qs);
         auto&& key_type = col_type->name_comparator();
         const auto found = key.with_linearized([&] (bytes_view key_bv) {
             using entry = std::pair<data_value, data_value>;
@@ -191,8 +191,8 @@ bool equal(const managed_bytes_opt& rhs, const column_value& lhs, const column_v
 }
 
 /// Convenience overload for term.
-bool equal(term& rhs, const column_value& lhs, const column_value_eval_bag& bag) {
-    return equal(to_managed_bytes_opt(rhs.bind_and_get(bag.options)), lhs, bag);
+bool equal(term& rhs, const column_value& lhs, const column_value_eval_bag& bag, service::query_state& qs) {
+    return equal(to_managed_bytes_opt(rhs.bind_and_get(bag.options, qs)), lhs, bag);
 }
 
 /// True iff columns' values equal t.
@@ -234,7 +234,7 @@ bool limits(managed_bytes_view lhs, oper_t op, managed_bytes_view rhs, const abs
 }
 
 /// True iff the column value is limited by rhs in the manner prescribed by op.
-bool limits(const column_value& col, oper_t op, term& rhs, const column_value_eval_bag& bag) {
+bool limits(const column_value& col, oper_t op, term& rhs, const column_value_eval_bag& bag, service::query_state& qs) {
     if (!is_slice(op)) { // For EQ or NEQ, use equal().
         throw std::logic_error("limits() called on non-slice op");
     }
@@ -242,7 +242,7 @@ bool limits(const column_value& col, oper_t op, term& rhs, const column_value_ev
     if (!lhs) {
         return false;
     }
-    const auto b = to_managed_bytes_opt(rhs.bind_and_get(bag.options));
+    const auto b = to_managed_bytes_opt(rhs.bind_and_get(bag.options, qs));
     return b ? limits(*lhs, op, *b, *get_value_comparator(col)) : false;
 }
 
@@ -504,7 +504,7 @@ value_set intersection(value_set a, value_set b, const abstract_type* type) {
     return std::visit(intersection_visitor{type}, std::move(a), std::move(b));
 }
 
-bool is_satisfied_by(const binary_operator& opr, const column_value_eval_bag& bag) {
+bool is_satisfied_by(const binary_operator& opr, const column_value_eval_bag& bag, service::query_state& qs) {
     return std::visit(overloaded_functor{
             [&] (const column_value& col) {
                 if (opr.op == oper_t::EQ) {
@@ -514,11 +514,11 @@ bool is_satisfied_by(const binary_operator& opr, const column_value_eval_bag& ba
                 } else if (is_slice(opr.op)) {
                     return limits(col, opr.op, *opr.rhs, bag);
                 } else if (opr.op == oper_t::CONTAINS) {
-                    return contains(col, opr.rhs->bind_and_get(bag.options), bag);
+                    return contains(col, opr.rhs->bind_and_get(bag.options, qs), bag);
                 } else if (opr.op == oper_t::CONTAINS_KEY) {
-                    return contains_key(col, opr.rhs->bind_and_get(bag.options), bag);
+                    return contains_key(col, opr.rhs->bind_and_get(bag.options, qs), bag);
                 } else if (opr.op == oper_t::LIKE) {
-                    return like(col, opr.rhs->bind_and_get(bag.options), bag);
+                    return like(col, opr.rhs->bind_and_get(bag.options, qs), bag);
                 } else if (opr.op == oper_t::IN) {
                     return is_one_of(col, *opr.rhs, bag);
                 } else {
@@ -527,9 +527,9 @@ bool is_satisfied_by(const binary_operator& opr, const column_value_eval_bag& ba
             },
             [&] (const column_value_tuple& cvs) {
                 if (opr.op == oper_t::EQ) {
-                    return equal(*opr.rhs, cvs, bag);
+                    return equal(*opr.rhs, cvs, bag, qs);
                 } else if (is_slice(opr.op)) {
-                    return limits(cvs, opr.op, *opr.rhs, bag);
+                    return limits(cvs, opr.op, *opr.rhs, bag, qs);
                 } else if (opr.op == oper_t::IN) {
                     return is_one_of(cvs, *opr.rhs, bag);
                 } else {
@@ -582,12 +582,12 @@ const auto deref = boost::adaptors::transformed([] (const managed_bytes_opt& b) 
 /// Returns possible values from t, which must be RHS of IN.
 value_list get_IN_values(
         const ::shared_ptr<term>& t, const query_options& options, const serialized_compare& comparator,
-        sstring_view column_name) {
+        sstring_view column_name, service::query_state& qs) {
     // RHS is prepared differently for different CQL cases.  Cast it dynamically to discern which case this is.
     if (auto dv = dynamic_pointer_cast<lists::delayed_value>(t)) {
         // Case `a IN (1,2,3)`.
         const auto result_range = dv->get_elements()
-                | boost::adaptors::transformed([&] (const ::shared_ptr<term>& t) { return to_managed_bytes_opt(t->bind_and_get(options)); })
+                | boost::adaptors::transformed([&] (const ::shared_ptr<term>& t) { return to_managed_bytes_opt(t->bind_and_get(options, qs)); })
                 | non_null | deref;
         return to_sorted_vector(std::move(result_range), comparator);
     } else if (auto mkr = dynamic_pointer_cast<lists::marker>(t)) {
@@ -685,7 +685,7 @@ nonwrapping_range<clustering_key_prefix> to_range(oper_t op, const clustering_ke
     return to_range<const clustering_key_prefix&>(op, val);
 }
 
-value_set possible_lhs_values(const column_definition* cdef, const expression& expr, const query_options& options) {
+value_set possible_lhs_values(const column_definition* cdef, const expression& expr, const query_options& options, service::query_state& qs) {
     const auto type = cdef ? get_value_comparator(cdef) : long_type.get();
     return std::visit(overloaded_functor{
             [] (bool b) {
@@ -695,7 +695,7 @@ value_set possible_lhs_values(const column_definition* cdef, const expression& e
                 return boost::accumulate(conj.children, unbounded_value_set,
                         [&] (const value_set& acc, const expression& child) {
                             return intersection(
-                                    std::move(acc), possible_lhs_values(cdef, child, options), type);
+                                    std::move(acc), possible_lhs_values(cdef, child, options, qs), type);
                         });
             },
             [&] (const binary_operator& oper) -> value_set {
@@ -705,7 +705,7 @@ value_set possible_lhs_values(const column_definition* cdef, const expression& e
                                 return unbounded_value_set;
                             }
                             if (is_compare(oper.op)) {
-                                managed_bytes_opt val = to_managed_bytes_opt(oper.rhs->bind_and_get(options));
+                                managed_bytes_opt val = to_managed_bytes_opt(oper.rhs->bind_and_get(options, qs));
                                 if (!val) {
                                     return empty_value_set; // All NULL comparisons fail; no column values match.
                                 }
@@ -750,7 +750,7 @@ value_set possible_lhs_values(const column_definition* cdef, const expression& e
                             if (cdef) {
                                 return unbounded_value_set;
                             }
-                            const auto val = to_managed_bytes_opt(oper.rhs->bind_and_get(options));
+                            const auto val = to_managed_bytes_opt(oper.rhs->bind_and_get(options, qs));
                             if (!val) {
                                 return empty_value_set; // All NULL comparisons fail; no token values match.
                             }

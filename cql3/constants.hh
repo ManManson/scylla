@@ -72,7 +72,7 @@ public:
         cql3::raw_value _bytes;
         value(cql3::raw_value bytes_) : _bytes(std::move(bytes_)) {}
         virtual cql3::raw_value get(const query_options& options) override { return _bytes; }
-        virtual cql3::raw_value_view bind_and_get(const query_options& options) override { return _bytes.to_view(); }
+        virtual cql3::raw_value_view bind_and_get(const query_options& options, service::query_state&) override { return _bytes.to_view(); }
         virtual sstring to_string() const override { return _bytes.to_view().with_value([] (const FragmentedView auto& v) { return to_hex(v); }); }
     };
 
@@ -83,7 +83,7 @@ public:
         class null_value final : public value {
         public:
             null_value() : value(cql3::raw_value::make_null()) {}
-            virtual ::shared_ptr<terminal> bind(const query_options& options) override { return {}; }
+            virtual ::shared_ptr<terminal> bind(const query_options& options, service::query_state&) override { return {}; }
             virtual sstring to_string() const override { return "null"; }
         };
     public:
@@ -177,7 +177,7 @@ public:
             assert(!_receiver->type->is_collection() && !_receiver->type->is_user_type());
         }
 
-        virtual cql3::raw_value_view bind_and_get(const query_options& options) override {
+        virtual cql3::raw_value_view bind_and_get(const query_options& options, service::query_state&) override {
             try {
                 auto value = options.get_value_at(_bind_index);
                 if (value) {
@@ -190,8 +190,8 @@ public:
             }
         }
 
-        virtual ::shared_ptr<terminal> bind(const query_options& options) override {
-            auto bytes = bind_and_get(options);
+        virtual ::shared_ptr<terminal> bind(const query_options& options, service::query_state& qs) override {
+            auto bytes = bind_and_get(options, qs);
             if (bytes.is_null()) {
                 return ::shared_ptr<terminal>{};
             }
@@ -206,8 +206,8 @@ public:
     public:
         using operation::operation;
 
-        virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params) override {
-            auto value = _t->bind_and_get(params._options);
+        virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params, service::query_state& qs) override {
+            auto value = _t->bind_and_get(params._options, qs);
             execute(m, prefix, params, column, std::move(value));
         }
 
@@ -223,8 +223,8 @@ public:
     struct adder final : operation {
         using operation::operation;
 
-        virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params) override {
-            auto value = _t->bind_and_get(params._options);
+        virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params, service::query_state& qs) override {
+            auto value = _t->bind_and_get(params._options, qs);
             if (value.is_null()) {
                 throw exceptions::invalid_request_exception("Invalid null value for counter increment");
             } else if (value.is_unset_value()) {
@@ -238,8 +238,8 @@ public:
     struct subtracter final : operation {
         using operation::operation;
 
-        virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params) override {
-            auto value = _t->bind_and_get(params._options);
+        virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params, service::query_state& qs) override {
+            auto value = _t->bind_and_get(params._options, qs);
             if (value.is_null()) {
                 throw exceptions::invalid_request_exception("Invalid null value for counter increment");
             } else if (value.is_unset_value()) {
@@ -259,7 +259,7 @@ public:
             : operation(column, {})
         { }
 
-        virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params) override;
+        virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params, service::query_state&) override;
     };
 };
 

@@ -97,8 +97,8 @@ public:
     private:
         std::vector<managed_bytes_opt> bind_internal(const query_options& options);
     public:
-        virtual shared_ptr<terminal> bind(const query_options& options) override;
-        virtual cql3::raw_value_view bind_and_get(const query_options& options) override;
+        virtual shared_ptr<terminal> bind(const query_options& options, service::query_state&) override;
+        virtual cql3::raw_value_view bind_and_get(const query_options& options, service::query_state&) override;
     };
 
     class marker : public abstract_marker {
@@ -109,14 +109,14 @@ public:
             assert(_receiver->type->is_user_type());
         }
 
-        virtual shared_ptr<terminal> bind(const query_options& options) override;
+        virtual shared_ptr<terminal> bind(const query_options& options, service::query_state&) override;
     };
 
     class setter : public operation {
     public:
         using operation::operation;
 
-        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params) override;
+        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params, service::query_state&) override;
         static void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params, const column_definition& column, ::shared_ptr<terminal> value);
     };
 
@@ -127,7 +127,7 @@ public:
             : operation(column, std::move(t)), _field_idx(field_idx) {
         }
 
-        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params) override;
+        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params, service::query_state&) override;
     };
 
     class deleter_by_field : public operation {
@@ -137,7 +137,7 @@ public:
             : operation(column, nullptr), _field_idx(field_idx) {
         }
 
-        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params) override;
+        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params, service::query_state&) override;
     };
 };
 

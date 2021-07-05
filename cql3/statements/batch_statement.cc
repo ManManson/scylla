@@ -367,9 +367,9 @@ future<shared_ptr<cql_transport::messages::result_message>> batch_statement::exe
         const query_options& statement_options = options.for_statement(i);
 
         statement.inc_cql_stats(qs.get_client_state().is_internal());
-        modification_statement::json_cache_opt json_cache = statement.maybe_prepare_json_cache(statement_options);
+        modification_statement::json_cache_opt json_cache = statement.maybe_prepare_json_cache(statement_options, qs);
         // At most one key
-        std::vector<dht::partition_range> keys = statement.build_partition_keys(statement_options, json_cache);
+        std::vector<dht::partition_range> keys = statement.build_partition_keys(statement_options, json_cache, qs);
         if (keys.empty()) {
             continue;
         }
@@ -381,7 +381,7 @@ future<shared_ptr<cql_transport::messages::result_message>> batch_statement::exe
         }
         cached_fn_calls.merge(std::move(const_cast<cql3::query_options&>(statement_options).take_cached_function_calls()));
 
-        std::vector<query::clustering_range> ranges = statement.create_clustering_ranges(statement_options, json_cache);
+        std::vector<query::clustering_range> ranges = statement.create_clustering_ranges(statement_options, json_cache, qs);
 
         request->add_row_update(statement, std::move(ranges), std::move(json_cache), statement_options);
     }

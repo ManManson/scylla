@@ -77,10 +77,10 @@ public:
     void merge_with(::shared_ptr<restriction> restriction) override {
         throw exceptions::unsupported_operation_exception();
     }
-    bytes_opt value_for(const column_definition& cdef, const query_options& options) const override {
+    bytes_opt value_for(const column_definition& cdef, const query_options& options, service::query_state&) const override {
         return {};
     }
-    std::vector<bounds_range_type> bounds_ranges(const query_options&) const override {
+    std::vector<bounds_range_type> bounds_ranges(const query_options&, service::query_state&) const override {
         // throw? should not reach?
         return {};
     }
@@ -595,8 +595,8 @@ namespace {
 using namespace expr;
 
 /// Computes partition-key ranges from token atoms in ex.
-dht::partition_range_vector partition_ranges_from_token(const expr::expression& ex, const query_options& options) {
-    auto values = possible_lhs_values(nullptr, ex, options);
+dht::partition_range_vector partition_ranges_from_token(const expr::expression& ex, const query_options& options, service::query_state& qs) {
+    auto values = possible_lhs_values(nullptr, ex, options, qs);
     if (values == expr::value_set(expr::value_list{})) {
         return {};
     }
@@ -635,7 +635,7 @@ void error_if_exceeds(size_t size, size_t limit) {
 
 /// Computes partition-key ranges from expressions, which contains EQ/IN for every partition column.
 dht::partition_range_vector partition_ranges_from_singles(
-        const std::vector<expr::expression>& expressions, const query_options& options, const schema& schema) {
+        const std::vector<expr::expression>& expressions, const query_options& options, const schema& schema, service::query_state& qs) {
     const size_t size_limit =
             options.get_cql_config().restrictions.partition_key_restrictions_max_cartesian_product_size;
     // Each element is a vector of that column's possible values:
@@ -644,7 +644,7 @@ dht::partition_range_vector partition_ranges_from_singles(
     for (const auto& e : expressions) {
         if (const auto arbitrary_binop = find_atom(e, [] (const binary_operator&) { return true; })) {
             if (auto cv = std::get_if<expr::column_value>(&arbitrary_binop->lhs)) {
-                const value_set vals = possible_lhs_values(cv->col, e, options);
+                const value_set vals = possible_lhs_values(cv->col, e, options, qs);
                 if (auto lst = std::get_if<value_list>(&vals)) {
                     if (lst->empty()) {
                         return {};
@@ -669,11 +669,11 @@ dht::partition_range_vector partition_ranges_from_singles(
 /// Computes partition-key ranges from EQ restrictions on each partition column.  Returns a single singleton range if
 /// the EQ restrictions are not mutually conflicting.  Otherwise, returns an empty vector.
 dht::partition_range_vector partition_ranges_from_EQs(
-        const std::vector<expr::expression>& eq_expressions, const query_options& options, const schema& schema) {
+        const std::vector<expr::expression>& eq_expressions, const query_options& options, const schema& schema, service::query_state& qs) {
     std::vector<managed_bytes> pk_value(schema.partition_key_size());
     for (const auto& e : eq_expressions) {
         const auto col = std::get<column_value>(find(e, oper_t::EQ)->lhs).col;
-        const auto vals = std::get<value_list>(possible_lhs_values(col, e, options));
+        const auto vals = std::get<value_list>(possible_lhs_values(col, e, options, qs));
         if (vals.empty()) { // Case of C=1 AND C=2.
             return {};
         }
@@ -684,7 +684,7 @@ dht::partition_range_vector partition_ranges_from_EQs(
 
 } // anonymous namespace
 
-dht::partition_range_vector statement_restrictions::get_partition_key_ranges(const query_options& options) const {
+dht::partition_range_vector statement_restrictions::get_partition_key_ranges(const query_options& options, service::query_state& qs) const {
     if (_partition_range_restrictions.empty()) {
         return {dht::partition_range::make_open_ended_both_sides()};
     }
@@ -694,12 +694,12 @@ dht::partition_range_vector statement_restrictions::get_partition_key_ranges(con
                     rlogger,
                     format("Unexpected size of token restrictions: {}", _partition_range_restrictions.size()));
         }
-        return partition_ranges_from_token(_partition_range_restrictions[0], options);
+        return partition_ranges_from_token(_partition_range_restrictions[0], options, qs);
     } else if (_partition_range_is_simple) {
         // Special case to avoid extra allocations required for a Cartesian product.
-        return partition_ranges_from_EQs(_partition_range_restrictions, options, *_schema);
+        return partition_ranges_from_EQs(_partition_range_restrictions, options, *_schema, qs);
     }
-    return partition_ranges_from_singles(_partition_range_restrictions, options, *_schema);
+    return partition_ranges_from_singles(_partition_range_restrictions, options, *_schema, qs);
 }
 
 namespace {
@@ -954,7 +954,8 @@ constexpr bool inclusive = true;
 std::vector<query::clustering_range> get_single_column_clustering_bounds(
         const query_options& options,
         schema_ptr schema,
-        const std::vector<expression>& single_column_restrictions) {
+        const std::vector<expression>& single_column_restrictions,
+        service::query_state& qs) {
     const size_t size_limit =
             options.get_cql_config().restrictions.clustering_key_restrictions_max_cartesian_product_size;
     size_t product_size = 1;
@@ -963,7 +964,8 @@ std::vector<query::clustering_range> get_single_column_clustering_bounds(
         auto values = possible_lhs_values(
                 &schema->clustering_column_at(i), // This should be the LHS of restrictions[i].
                 single_column_restrictions[i],
-                options);
+                options,
+                qs);
         if (auto list = std::get_if<value_list>(&values)) {
             if (list->empty()) { // Impossible condition -- no rows can possibly match.
                 return {};
@@ -1149,7 +1151,7 @@ query::clustering_range range_from_raw_bounds(
 
 } // anonymous namespace
 
-std::vector<query::clustering_range> statement_restrictions::get_clustering_bounds(const query_options& options) const {
+std::vector<query::clustering_range> statement_restrictions::get_clustering_bounds(const query_options& options, service::query_state& qs) const {
     if (_clustering_prefix_restrictions.empty()) {
         return {query::clustering_range::make_open_ended_both_sides()};
     }
@@ -1185,7 +1187,7 @@ std::vector<query::clustering_range> statement_restrictions::get_clustering_boun
         }
         return bounds;
     } else {
-        return get_single_column_clustering_bounds(options, _schema, _clustering_prefix_restrictions);
+        return get_single_column_clustering_bounds(options, _schema, _clustering_prefix_restrictions, qs);
     }
 }
 

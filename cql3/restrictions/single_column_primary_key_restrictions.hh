@@ -183,13 +183,13 @@ public:
         do_merge_with(::static_pointer_cast<single_column_restriction>(restriction));
     }
 
-    std::vector<ValueType> values_as_keys(const query_options& options) const {
+    std::vector<ValueType> values_as_keys(const query_options& options, service::query_state& qs) const {
         std::vector<std::vector<managed_bytes_opt>> value_vector;
         value_vector.reserve(_restrictions->size());
         for (auto&& e : restrictions()) {
             auto&& r = e.second;
             assert(!has_slice(r->expression));
-            auto values = std::get<expr::value_list>(possible_lhs_values(e.first, r->expression, options));
+            auto values = std::get<expr::value_list>(possible_lhs_values(e.first, r->expression, options, qs));
             if (values.empty()) {
                 return {};
             }
@@ -208,7 +208,7 @@ public:
     }
 
 private:
-    std::vector<range_type> compute_bounds(const query_options& options) const {
+    std::vector<range_type> compute_bounds(const query_options& options, service::query_state& qs) const {
         std::vector<range_type> ranges;
 
         // TODO: rewrite this to simply invoke possible_lhs_values on each clustering column, find the first
@@ -220,7 +220,7 @@ private:
                 const column_definition* def = e.first;
                 assert(components.size() == _schema->position(*def));
                 // Because _restrictions is all EQ, possible_lhs_values must return a list, not a range.
-                const auto b = std::get<expr::value_list>(possible_lhs_values(e.first, e.second->expression, options));
+                const auto b = std::get<expr::value_list>(possible_lhs_values(e.first, e.second->expression, options, qs));
                 // Furthermore, this list is either a single element (when all RHSs are the same) or empty (when at
                 // least two are different, so the restrictions cannot hold simultaneously -- ie, c=1 AND c=2).
                 if (b.empty()) {
@@ -243,7 +243,7 @@ private:
             }
 
             if (has_slice(r->expression)) {
-                const auto values = possible_lhs_values(def, r->expression, options);
+                const auto values = possible_lhs_values(def, r->expression, options, qs);
                 if (values == expr::value_set(expr::value_list{})) {
                     return {};
                 }
@@ -288,7 +288,7 @@ private:
                 return ranges;
             }
 
-            auto values = std::get<expr::value_list>(possible_lhs_values(def, r->expression, options));
+            auto values = std::get<expr::value_list>(possible_lhs_values(def, r->expression, options, qs));
             if (values.empty()) {
                 return {};
             }
@@ -307,10 +307,10 @@ private:
     }
 
 public:
-    std::vector<bounds_range_type> bounds_ranges(const query_options& options) const override;
+    std::vector<bounds_range_type> bounds_ranges(const query_options& options, service::query_state&) const override;
 
-    std::vector<bytes_opt> values(const query_options& options) const {
-        auto src = values_as_keys(options);
+    std::vector<bytes_opt> values(const query_options& options, service::query_state& qs) const {
+        auto src = values_as_keys(options, qs);
         std::vector<bytes_opt> res;
         for (const ValueType& r : src) {
             for (const auto& component : r.components()) {
@@ -320,8 +320,8 @@ public:
         return res;
     }
 
-    virtual bytes_opt value_for(const column_definition& cdef, const query_options& options) const override {
-        return _restrictions->value_for(cdef, options);
+    virtual bytes_opt value_for(const column_definition& cdef, const query_options& options, service::query_state& qs) const override {
+        return _restrictions->value_for(cdef, options, qs);
     }
 
     const single_column_restrictions::restrictions_map& restrictions() const {
@@ -357,10 +357,10 @@ public:
 
 template<>
 inline dht::partition_range_vector
-single_column_primary_key_restrictions<partition_key>::bounds_ranges(const query_options& options) const {
+single_column_primary_key_restrictions<partition_key>::bounds_ranges(const query_options& options, service::query_state& qs) const {
     dht::partition_range_vector ranges;
     ranges.reserve(size());
-    for (query::range<partition_key>& r : compute_bounds(options)) {
+    for (query::range<partition_key>& r : compute_bounds(options, qs)) {
         if (!r.is_singular()) {
             throw exceptions::invalid_request_exception("Range queries on partition key values not supported.");
         }
@@ -375,8 +375,8 @@ single_column_primary_key_restrictions<partition_key>::bounds_ranges(const query
 
 template<>
 inline std::vector<query::clustering_range>
-single_column_primary_key_restrictions<clustering_key_prefix>::bounds_ranges(const query_options& options) const {
-    auto wrapping_bounds = compute_bounds(options);
+single_column_primary_key_restrictions<clustering_key_prefix>::bounds_ranges(const query_options& options, service::query_state& qs) const {
+    auto wrapping_bounds = compute_bounds(options, qs);
     auto bounds = boost::copy_range<query::clustering_row_ranges>(wrapping_bounds
             | boost::adaptors::filtered([&](auto&& r) {
                 auto bounds = bound_view::from_range(r);

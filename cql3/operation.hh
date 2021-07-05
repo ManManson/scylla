@@ -115,7 +115,7 @@ public:
     /**
      * Execute the operation.
      */
-    virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params) = 0;
+    virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params, service::query_state&) = 0;
 
     /**
      * A parsed raw UPDATE operation.

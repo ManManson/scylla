@@ -159,11 +159,11 @@ public:
             }
         }
     private:
-        std::vector<managed_bytes_opt> bind_internal(const query_options& options) {
+        std::vector<managed_bytes_opt> bind_internal(const query_options& options, service::query_state& qs) {
             std::vector<managed_bytes_opt> buffers;
             buffers.resize(_elements.size());
             for (size_t i = 0; i < _elements.size(); ++i) {
-                const auto& value = _elements[i]->bind_and_get(options);
+                const auto& value = _elements[i]->bind_and_get(options, qs);
                 if (value.is_unset_value()) {
                     throw exceptions::invalid_request_exception(format("Invalid unset value for tuple field number {:d}", i));
                 }
@@ -184,13 +184,13 @@ public:
         }
 
     public:
-        virtual shared_ptr<terminal> bind(const query_options& options) override {
-            return ::make_shared<value>(bind_internal(options));
+        virtual shared_ptr<terminal> bind(const query_options& options, service::query_state& qs) override {
+            return ::make_shared<value>(bind_internal(options, qs));
         }
 
-        virtual cql3::raw_value_view bind_and_get(const query_options& options) override {
+        virtual cql3::raw_value_view bind_and_get(const query_options& options, service::query_state& qs) override {
             // We don't "need" that override but it saves us the allocation of a Value object if used
-            return cql3::raw_value_view::make_temporary(cql3::raw_value::make_value(_type->build_value_fragmented(bind_internal(options))));
+            return cql3::raw_value_view::make_temporary(cql3::raw_value::make_value(_type->build_value_fragmented(bind_internal(options, qs))));
         }
     };
 
@@ -299,7 +299,7 @@ public:
             : abstract_marker(bind_index, std::move(receiver))
         { }
 
-        virtual shared_ptr<terminal> bind(const query_options& options) override {
+        virtual shared_ptr<terminal> bind(const query_options& options, service::query_state&) override {
             const auto& value = options.get_value_at(_bind_index);
             if (value.is_null()) {
                 return nullptr;
@@ -325,7 +325,7 @@ public:
     public:
         in_marker(int32_t bind_index, lw_shared_ptr<column_specification> receiver);
 
-        virtual shared_ptr<terminal> bind(const query_options& options) override;
+        virtual shared_ptr<terminal> bind(const query_options& options, service::query_state&) override;
     };
 
     template <typename T>

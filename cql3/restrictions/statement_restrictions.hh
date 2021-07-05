@@ -273,7 +273,7 @@ public:
      * @return the specified bound of the partition key
      * @throws InvalidRequestException if the boundary cannot be retrieved
      */
-    dht::partition_range_vector get_partition_key_ranges(const query_options& options) const;
+    dht::partition_range_vector get_partition_key_ranges(const query_options& options, service::query_state&) const;
 
 #if 0
     /**
@@ -382,7 +382,7 @@ private:
 #endif
 
 public:
-    std::vector<query::clustering_range> get_clustering_bounds(const query_options& options) const;
+    std::vector<query::clustering_range> get_clustering_bounds(const query_options& options, service::query_state&) const;
 
     /**
      * Checks if the query need to use filtering.

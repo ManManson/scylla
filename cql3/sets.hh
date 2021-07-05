@@ -95,13 +95,13 @@ public:
         }
         virtual bool contains_bind_marker() const override;
         virtual void collect_marker_specification(variable_specifications& bound_names) const override;
-        virtual shared_ptr<terminal> bind(const query_options& options);
+        virtual shared_ptr<terminal> bind(const query_options& options, service::query_state&);
     };
 
     class marker : public abstract_marker {
     public:
         marker(int32_t bind_index, lw_shared_ptr<column_specification> receiver);
-        virtual ::shared_ptr<terminal> bind(const query_options& options) override;
+        virtual ::shared_ptr<terminal> bind(const query_options& options, service::query_state&) override;
     };
 
     class setter : public operation {
@@ -109,7 +109,7 @@ public:
         setter(const column_definition& column, shared_ptr<term> t)
                 : operation(column, std::move(t)) {
         }
-        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params) override;
+        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params, service::query_state&) override;
         static void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params, const column_definition& column, ::shared_ptr<terminal> value);
     };
 
@@ -118,7 +118,7 @@ public:
         adder(const column_definition& column, shared_ptr<term> t)
             : operation(column, std::move(t)) {
         }
-        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params) override;
+        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params, service::query_state&) override;
         static void do_add(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params,
                 shared_ptr<term> value, const column_definition& column);
     };
@@ -129,14 +129,14 @@ public:
         discarder(const column_definition& column, shared_ptr<term> t)
             : operation(column, std::move(t)) {
         }
-        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params) override;
+        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params, service::query_state&) override;
     };
 
     class element_discarder : public operation {
     public:
         element_discarder(const column_definition& column, shared_ptr<term> t)
             : operation(column, std::move(t)) { }
-        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params) override;
+        virtual void execute(mutation& m, const clustering_key_prefix& row_key, const update_parameters& params, service::query_state&) override;
     };
 };
 

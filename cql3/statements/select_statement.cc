@@ -211,7 +211,7 @@ const sstring& select_statement::column_family() const {
 }
 
 query::partition_slice
-select_statement::make_partition_slice(const query_options& options) const
+select_statement::make_partition_slice(const query_options& options, service::query_state& qs) const
 {
     query::column_id_vector static_columns;
     query::column_id_vector regular_columns;
@@ -235,7 +235,7 @@ select_statement::make_partition_slice(const query_options& options) const
             std::move(static_columns), {}, _opts, nullptr, options.get_cql_serialization_format());
     }
 
-    auto bounds =_restrictions->get_clustering_bounds(options);
+    auto bounds =_restrictions->get_clustering_bounds(options, qs);
     if (bounds.size() > 1) {
         auto comparer = position_in_partition::less_compare(*_schema);
         auto bounds_sorter = [&comparer] (const query::clustering_range& lhs, const query::clustering_range& rhs) {
@@ -251,12 +251,12 @@ select_statement::make_partition_slice(const query_options& options) const
         std::move(static_columns), std::move(regular_columns), _opts, nullptr, options.get_cql_serialization_format(), get_per_partition_limit(options));
 }
 
-uint64_t select_statement::do_get_limit(const query_options& options, ::shared_ptr<term> limit, uint64_t default_limit) const {
+uint64_t select_statement::do_get_limit(const query_options& options, ::shared_ptr<term> limit, uint64_t default_limit, service::query_state& qs) const {
     if (!limit || _selection->is_aggregate()) {
         return default_limit;
     }
 
-    auto val = limit->bind_and_get(options);
+    auto val = limit->bind_and_get(options, qs);
     if (val.is_null()) {
         throw exceptions::invalid_request_exception("Invalid null value of limit");
     }
@@ -325,7 +325,7 @@ select_statement::do_execute(service::storage_proxy& proxy,
     _stats.select_partition_range_scan += _range_scan;
     _stats.select_partition_range_scan_no_bypass_cache += _range_scan_no_bypass_cache;
 
-    auto slice = make_partition_slice(options);
+    auto slice = make_partition_slice(options, state);
     auto command = ::make_lw_shared<query::read_command>(
             _schema->id(),
             _schema->version(),
@@ -353,7 +353,7 @@ select_statement::do_execute(service::storage_proxy& proxy,
         page_size = internal_paging_size;
     }
 
-    auto key_ranges = _restrictions->get_partition_key_ranges(options);
+    auto key_ranges = _restrictions->get_partition_key_ranges(options, state);
 
     if (db::is_serial_consistency(options.get_consistency())) {
         if (key_ranges.size() != 1 || !query::is_single_partition(key_ranges.front())) {
@@ -492,7 +492,7 @@ generate_base_key_from_index_pk(const partition_key& index_pk, const std::option
 lw_shared_ptr<query::read_command>
 indexed_table_select_statement::prepare_command_for_base_query(service::storage_proxy& proxy, const query_options& options,
         service::query_state& state, gc_clock::time_point now, bool use_paging) const {
-    auto slice = make_partition_slice(options);
+    auto slice = make_partition_slice(options, state);
     if (use_paging) {
         slice.options.set<query::partition_slice::option::allow_short_read>();
         slice.options.set<query::partition_slice::option::send_partition_key>();
@@ -904,11 +904,11 @@ indexed_table_select_statement::indexed_table_select_statement(schema_ptr schema
     , _view_schema(view_schema)
 {
     if (_index.metadata().local()) {
-        _get_partition_ranges_for_posting_list = [this] (const query_options& options) { return get_partition_ranges_for_local_index_posting_list(options); };
-        _get_partition_slice_for_posting_list = [this] (const query_options& options) { return get_partition_slice_for_local_index_posting_list(options); };
+        _get_partition_ranges_for_posting_list = [this] (const query_options& options, service::query_state& qs) { return get_partition_ranges_for_local_index_posting_list(options, qs); };
+        _get_partition_slice_for_posting_list = [this] (const query_options& options, service::query_state& qs) { return get_partition_slice_for_local_index_posting_list(options, qs); };
     } else {
-        _get_partition_ranges_for_posting_list = [this] (const query_options& options) { return get_partition_ranges_for_global_index_posting_list(options); };
-        _get_partition_slice_for_posting_list = [this] (const query_options& options) { return get_partition_slice_for_global_index_posting_list(options); };
+        _get_partition_ranges_for_posting_list = [this] (const query_options& options, service::query_state& qs) { return get_partition_ranges_for_global_index_posting_list(options, qs); };
+        _get_partition_slice_for_posting_list = [this] (const query_options& options, service::query_state& qs) { return get_partition_slice_for_global_index_posting_list(options, qs); };
     }
 }
 
@@ -959,7 +959,7 @@ lw_shared_ptr<const service::pager::paging_state> indexed_table_select_statement
     auto& last_base_pk = std::get<0>(last_partition_and_clustering_key);
     auto& last_base_ck = std::get<1>(last_partition_and_clustering_key);
 
-    bytes_opt indexed_column_value = _used_index_restrictions->value_for(*cdef, options);
+    bytes_opt indexed_column_value = _used_index_restrictions->value_for(*cdef, options, state);
 
     auto index_pk = [&]() {
         if (_index.metadata().local()) {
@@ -1128,11 +1128,11 @@ indexed_table_select_statement::do_execute(service::storage_proxy& proxy,
     }
 }
 
-dht::partition_range_vector indexed_table_select_statement::get_partition_ranges_for_local_index_posting_list(const query_options& options) const {
-    return _restrictions->get_partition_key_ranges(options);
+dht::partition_range_vector indexed_table_select_statement::get_partition_ranges_for_local_index_posting_list(const query_options& options, service::query_state& qs) const {
+    return _restrictions->get_partition_key_ranges(options, qs);
 }
 
-dht::partition_range_vector indexed_table_select_statement::get_partition_ranges_for_global_index_posting_list(const query_options& options) const {
+dht::partition_range_vector indexed_table_select_statement::get_partition_ranges_for_global_index_posting_list(const query_options& options, service::query_state& qs) const {
     dht::partition_range_vector partition_ranges;
 
     const column_definition* cdef = _schema->get_column_definition(to_bytes(_index.target_column()));
@@ -1140,7 +1140,7 @@ dht::partition_range_vector indexed_table_select_statement::get_partition_ranges
         throw exceptions::invalid_request_exception("Indexed column not found in schema");
     }
 
-    bytes_opt value = _used_index_restrictions->value_for(*cdef, options);
+    bytes_opt value = _used_index_restrictions->value_for(*cdef, options, qs);
     if (value) {
         auto pk = partition_key::from_single_value(*_view_schema, *value);
         auto dk = dht::decorate_key(*_view_schema, pk);
@@ -1151,7 +1151,7 @@ dht::partition_range_vector indexed_table_select_statement::get_partition_ranges
     return partition_ranges;
 }
 
-query::partition_slice indexed_table_select_statement::get_partition_slice_for_global_index_posting_list(const query_options& options) const {
+query::partition_slice indexed_table_select_statement::get_partition_slice_for_global_index_posting_list(const query_options& options, service::query_state& qs) const {
     partition_slice_builder partition_slice_builder{*_view_schema};
 
     if (!_restrictions->has_partition_key_unrestricted_components()) {
@@ -1184,14 +1184,14 @@ query::partition_slice indexed_table_select_statement::get_partition_slice_for_g
                 }
             }
 
-            partition_slice_builder.with_ranges(clustering_restrictions->bounds_ranges(options));
+            partition_slice_builder.with_ranges(clustering_restrictions->bounds_ranges(options, qs));
         }
     }
 
     return partition_slice_builder.build();
 }
 
-query::partition_slice indexed_table_select_statement::get_partition_slice_for_local_index_posting_list(const query_options& options) const {
+query::partition_slice indexed_table_select_statement::get_partition_slice_for_local_index_posting_list(const query_options& options, service::query_state& qs) const {
     partition_slice_builder partition_slice_builder{*_view_schema};
 
     ::shared_ptr<restrictions::single_column_clustering_key_restrictions> clustering_restrictions;
@@ -1199,7 +1199,7 @@ query::partition_slice indexed_table_select_statement::get_partition_slice_for_l
     clustering_restrictions = ::make_shared<restrictions::single_column_clustering_key_restrictions>(_view_schema, true);
     const column_definition* cdef = _schema->get_column_definition(to_bytes(_index.target_column()));
 
-    bytes_opt value = _used_index_restrictions->value_for(*cdef, options);
+    bytes_opt value = _used_index_restrictions->value_for(*cdef, options, qs);
     if (value) {
         const column_definition* view_cdef = _view_schema->get_column_definition(to_bytes(_index.target_column()));
         auto index_eq_restriction = ::make_shared<restrictions::single_column_restriction>(*view_cdef);
@@ -1219,7 +1219,7 @@ query::partition_slice indexed_table_select_statement::get_partition_slice_for_l
         }
     }
 
-    partition_slice_builder.with_ranges(clustering_restrictions->bounds_ranges(options));
+    partition_slice_builder.with_ranges(clustering_restrictions->bounds_ranges(options, qs));
 
     return partition_slice_builder.build();
 }
@@ -1236,8 +1236,8 @@ indexed_table_select_statement::read_posting_list(service::storage_proxy& proxy,
                   db::timeout_clock::time_point timeout,
                   bool include_base_clustering_key) const
 {
-    dht::partition_range_vector partition_ranges = _get_partition_ranges_for_posting_list(options);
-    auto partition_slice = _get_partition_slice_for_posting_list(options);
+    dht::partition_range_vector partition_ranges = _get_partition_ranges_for_posting_list(options, state);
+    auto partition_slice = _get_partition_slice_for_posting_list(options, state);
 
     auto cmd = ::make_lw_shared<query::read_command>(
             _view_schema->id(),

@@ -78,7 +78,7 @@ public:
      * @return the result of binding all the variables of this NonTerminal (or
      * 'this' if the term is terminal).
      */
-    virtual ::shared_ptr<terminal> bind(const query_options& options) = 0;
+    virtual ::shared_ptr<terminal> bind(const query_options& options, service::query_state&) = 0;
 
     /**
      * A shorter for bind(values).get().
@@ -86,7 +86,7 @@ public:
      * object between the bind and the get (note that we still want to be able
      * to separate bind and get for collections).
      */
-    virtual cql3::raw_value_view bind_and_get(const query_options& options) = 0;
+    virtual cql3::raw_value_view bind_and_get(const query_options& options, service::query_state&) = 0;
 
     /**
      * Whether or not that term contains at least one bind marker.
@@ -164,7 +164,7 @@ public:
     virtual void collect_marker_specification(variable_specifications& bound_names) const {
     }
 
-    virtual ::shared_ptr<terminal> bind(const query_options& options) override {
+    virtual ::shared_ptr<terminal> bind(const query_options& options, service::query_state&) override {
         return static_pointer_cast<terminal>(this->shared_from_this());
     }
 
@@ -179,7 +179,7 @@ public:
      */
     virtual cql3::raw_value get(const query_options& options) = 0;
 
-    virtual cql3::raw_value_view bind_and_get(const query_options& options) override {
+    virtual cql3::raw_value_view bind_and_get(const query_options& options, service::query_state&) override {
         return raw_value_view::make_temporary(get(options));
     }
 
@@ -210,8 +210,8 @@ public:
  */
 class non_terminal : public term {
 public:
-    virtual cql3::raw_value_view bind_and_get(const query_options& options) override {
-        auto t = bind(options);
+    virtual cql3::raw_value_view bind_and_get(const query_options& options, service::query_state& qs) override {
+        auto t = bind(options, qs);
         if (t) {
             return cql3::raw_value_view::make_temporary(t->get(options));
         }

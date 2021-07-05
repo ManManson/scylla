@@ -132,7 +132,7 @@ void column_condition::collect_marker_specificaton(variable_specifications& boun
     }
 }
 
-bool column_condition::applies_to(const data_value* cell_value, const query_options& options) const {
+bool column_condition::applies_to(const data_value* cell_value, const query_options& options, service::query_state& qs) const {
 
     // Cassandra condition support has a few quirks:
     // - only a simple conjunct of predicates is supported "predicate AND predicate AND ..."
@@ -155,7 +155,7 @@ bool column_condition::applies_to(const data_value* cell_value, const query_opti
         assert(cell_value->type()->is_collection());
         const collection_type_impl& cell_type = static_cast<const collection_type_impl&>(*cell_value->type());
 
-        cql3::raw_value_view key = _collection_element->bind_and_get(options);
+        cql3::raw_value_view key = _collection_element->bind_and_get(options, qs);
         if (key.is_unset_value()) {
             throw exceptions::invalid_request_exception(
                     format("Invalid 'unset' value in {} element access", cell_type.cql3_type_name()));
@@ -211,7 +211,7 @@ bool column_condition::applies_to(const data_value* cell_value, const query_opti
 
     if (is_compare(_op)) {
         // <, >, >=, <=, !=
-        cql3::raw_value_view param = _value->bind_and_get(options);
+        cql3::raw_value_view param = _value->bind_and_get(options, qs);
 
         if (param.is_unset_value()) {
             throw exceptions::invalid_request_exception("Invalid 'unset' value in condition");
@@ -240,7 +240,7 @@ bool column_condition::applies_to(const data_value* cell_value, const query_opti
         if (_matcher) {
             return (*_matcher)(bytes_view(cell_value->serialize_nonnull()));
         } else {
-            auto param = _value->bind_and_get(options);  // LIKE pattern
+            auto param = _value->bind_and_get(options, qs);  // LIKE pattern
             if (param.is_unset_value()) {
                 throw exceptions::invalid_request_exception("Invalid 'unset' value in LIKE pattern");
             }
@@ -271,7 +271,7 @@ bool column_condition::applies_to(const data_value* cell_value, const query_opti
         }
     } else {
         for (auto&& v : _in_values) {
-            in_values.emplace_back(to_bytes_opt(v->bind_and_get(options)));
+            in_values.emplace_back(to_bytes_opt(v->bind_and_get(options, qs)));
         }
     }
     // If cell value is NULL, IN list must contain NULL or an empty set/list. Otherwise it must contain cell value.

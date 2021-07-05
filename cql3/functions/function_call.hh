@@ -65,8 +65,8 @@ public:
             : _fun(std::move(fun)), _terms(std::move(terms)), _id(id), _in_lwt_context(in_lwt_context) {
     }
     virtual void collect_marker_specification(variable_specifications& bound_names) const override;
-    virtual shared_ptr<terminal> bind(const query_options& options) override;
-    virtual cql3::raw_value_view bind_and_get(const query_options& options) override;
+    virtual shared_ptr<terminal> bind(const query_options& options, service::query_state&) override;
+    virtual cql3::raw_value_view bind_and_get(const query_options& options, service::query_state&) override;
 private:
     static bytes_opt execute_internal(cql_serialization_format sf, scalar_function& fun, std::vector<bytes_opt> params);
 public:
