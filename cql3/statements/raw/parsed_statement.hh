@@ -41,7 +41,7 @@
 
 #pragma once
 
-#include "cql3/variable_specifications.hh"
+#include "cql3/raw_prepare_metadata.hh"
 #include "cql3/column_specification.hh"
 
 #include <seastar/core/shared_ptr.hh>
@@ -64,13 +64,13 @@ namespace raw {
 
 class parsed_statement {
 protected:
-    variable_specifications _variables;
+    raw_prepare_metadata _prep_meta;
 
 public:
     virtual ~parsed_statement();
 
-    variable_specifications& get_bound_variables();
-    const variable_specifications& get_bound_variables() const;
+    raw_prepare_metadata& get_prepare_metadata();
+    const raw_prepare_metadata& get_prepare_metadata() const;
 
     void set_bound_variables(const std::vector<::shared_ptr<column_identifier>>& bound_names);
 

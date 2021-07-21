@@ -136,15 +136,15 @@ db::timeout_clock::duration attributes::get_timeout(const query_options& options
     return std::chrono::duration_cast<db::timeout_clock::duration>(std::chrono::nanoseconds(duration.nanoseconds));
 }
 
-void attributes::collect_marker_specification(variable_specifications& bound_names) const {
+void attributes::collect_prepare_metadata(raw_prepare_metadata& meta) const {
     if (_timestamp) {
-        _timestamp->collect_marker_specification(bound_names);
+        _timestamp->collect_prepare_metadata(meta);
     }
     if (_time_to_live) {
-        _time_to_live->collect_marker_specification(bound_names);
+        _time_to_live->collect_prepare_metadata(meta);
     }
     if (_timeout) {
-        _timeout->collect_marker_specification(bound_names);
+        _timeout->collect_prepare_metadata(meta);
     }
 }
 

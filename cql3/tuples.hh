@@ -153,9 +153,9 @@ public:
             return std::any_of(_elements.begin(), _elements.end(), std::mem_fn(&term::contains_bind_marker));
         }
 
-        virtual void collect_marker_specification(variable_specifications& bound_names) const override {
+        virtual void collect_prepare_metadata(raw_prepare_metadata& meta) const override {
             for (auto&& term : _elements) {
-                term->collect_marker_specification(bound_names);
+                term->collect_prepare_metadata(meta);
             }
         }
     private:

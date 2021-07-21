@@ -430,9 +430,9 @@ functions::type_equals(const std::vector<data_type>& t1, const std::vector<data_
 }
 
 void
-function_call::collect_marker_specification(variable_specifications& bound_names) const {
+function_call::collect_prepare_metadata(raw_prepare_metadata& meta) const {
     for (auto&& t : _terms) {
-        t->collect_marker_specification(bound_names);
+        t->collect_prepare_metadata(meta);
     }
 }
 

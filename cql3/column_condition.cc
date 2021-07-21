@@ -118,17 +118,17 @@ uint32_t read_and_check_list_index(const cql3::raw_value_view& key) {
 
 namespace cql3 {
 
-void column_condition::collect_marker_specificaton(variable_specifications& bound_names) const {
+void column_condition::collect_marker_specificaton(raw_prepare_metadata& meta) const {
     if (_collection_element) {
-        _collection_element->collect_marker_specification(bound_names);
+        _collection_element->collect_prepare_metadata(meta);
     }
     if (!_in_values.empty()) {
         for (auto&& value : _in_values) {
-            value->collect_marker_specification(bound_names);
+            value->collect_prepare_metadata(meta);
         }
     }
     if (_value) {
-        _value->collect_marker_specification(bound_names);
+        _value->collect_prepare_metadata(meta);
     }
 }
 

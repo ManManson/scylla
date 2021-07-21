@@ -389,7 +389,7 @@ void modification_statement::build_cas_result_set_metadata() {
 }
 
 void
-modification_statement::process_where_clause(database& db, std::vector<relation_ptr> where_clause, variable_specifications& names) {
+modification_statement::process_where_clause(database& db, std::vector<relation_ptr> where_clause, raw_prepare_metadata& names) {
     _restrictions = restrictions::statement_restrictions(db, s, type, where_clause, names,
             applies_only_to_static_columns(), _selects_a_collection, false);
     /*
@@ -461,24 +461,24 @@ namespace raw {
 std::unique_ptr<prepared_statement>
 modification_statement::prepare(database& db, cql_stats& stats) {
     schema_ptr schema = validation::validate_column_family(db, keyspace(), column_family());
-    auto bound_names = get_bound_variables();
-    auto statement = prepare(db, bound_names, stats);
-    auto partition_key_bind_indices = bound_names.get_partition_key_bind_indexes(*schema);
-    return std::make_unique<prepared_statement>(std::move(statement), bound_names, std::move(partition_key_bind_indices));
+    auto meta = get_prepare_metadata();
+    auto statement = prepare(db, meta, stats);
+    auto partition_key_bind_indices = meta.get_partition_key_bind_indexes(*schema);
+    return std::make_unique<prepared_statement>(std::move(statement), meta, std::move(partition_key_bind_indices));
 }
 
 ::shared_ptr<cql3::statements::modification_statement>
-modification_statement::prepare(database& db, variable_specifications& bound_names, cql_stats& stats) const {
+modification_statement::prepare(database& db, raw_prepare_metadata& meta, cql_stats& stats) const {
     schema_ptr schema = validation::validate_column_family(db, keyspace(), column_family());
 
     auto prepared_attributes = _attrs->prepare(db, keyspace(), column_family());
-    prepared_attributes->collect_marker_specification(bound_names);
+    prepared_attributes->collect_prepare_metadata(meta);
 
-    return prepare_internal(db, schema, bound_names, std::move(prepared_attributes), stats);
+    return prepare_internal(db, schema, meta, std::move(prepared_attributes), stats);
 }
 
 void
-modification_statement::prepare_conditions(database& db, const schema& schema, variable_specifications& bound_names,
+modification_statement::prepare_conditions(database& db, const schema& schema, raw_prepare_metadata& meta,
         cql3::statements::modification_statement& stmt) const
 {
     if (_if_not_exists || _if_exists || !_conditions.empty()) {
@@ -508,7 +508,7 @@ modification_statement::prepare_conditions(database& db, const schema& schema, v
                 }
 
                 auto condition = entry.second->prepare(db, keyspace(), *def);
-                condition->collect_marker_specificaton(bound_names);
+                condition->collect_marker_specificaton(meta);
 
                 if (def->is_primary_key()) {
                     throw exceptions::invalid_request_exception(format("PRIMARY KEY column '{}' cannot have IF conditions", *id));

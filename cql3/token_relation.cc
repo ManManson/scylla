@@ -81,10 +81,10 @@ std::vector<lw_shared_ptr<cql3::column_specification>> cql3::token_relation::to_
 
 ::shared_ptr<cql3::restrictions::restriction> cql3::token_relation::new_EQ_restriction(
         database& db, schema_ptr schema,
-        variable_specifications& bound_names) {
+        raw_prepare_metadata& meta) {
     auto column_defs = get_column_definitions(*schema);
     auto term = to_term(to_receivers(*schema, column_defs), *_value, db,
-            schema->ks_name(), bound_names);
+            schema->ks_name(), meta);
     auto r = ::make_shared<restrictions::token_restriction>(column_defs);
     using namespace expr;
     r->expression = binary_operator{token{}, oper_t::EQ, std::move(term)};
@@ -93,7 +93,7 @@ std::vector<lw_shared_ptr<cql3::column_specification>> cql3::token_relation::to_
 
 ::shared_ptr<cql3::restrictions::restriction> cql3::token_relation::new_IN_restriction(
         database& db, schema_ptr schema,
-        variable_specifications& bound_names) {
+        raw_prepare_metadata& meta) {
     throw exceptions::invalid_request_exception(
             format("{} cannot be used with the token function",
                     get_operator()));
@@ -101,12 +101,12 @@ std::vector<lw_shared_ptr<cql3::column_specification>> cql3::token_relation::to_
 
 ::shared_ptr<cql3::restrictions::restriction> cql3::token_relation::new_slice_restriction(
         database& db, schema_ptr schema,
-        variable_specifications& bound_names,
+        raw_prepare_metadata& meta,
         statements::bound bound,
         bool inclusive) {
     auto column_defs = get_column_definitions(*schema);
     auto term = to_term(to_receivers(*schema, column_defs), *_value, db,
-            schema->ks_name(), bound_names);
+            schema->ks_name(), meta);
     auto r = ::make_shared<restrictions::token_restriction>(column_defs);
     using namespace expr;
     r->expression = binary_operator{token{}, pick_operator(bound, inclusive), std::move(term)};
@@ -115,14 +115,14 @@ std::vector<lw_shared_ptr<cql3::column_specification>> cql3::token_relation::to_
 
 ::shared_ptr<cql3::restrictions::restriction> cql3::token_relation::new_contains_restriction(
         database& db, schema_ptr schema,
-        variable_specifications& bound_names, bool isKey) {
+        raw_prepare_metadata& meta, bool isKey) {
     throw exceptions::invalid_request_exception(
             format("{} cannot be used with the token function",
                     get_operator()));
 }
 
 ::shared_ptr<cql3::restrictions::restriction> cql3::token_relation::new_LIKE_restriction(
-        database&, schema_ptr, variable_specifications&) {
+        database&, schema_ptr, raw_prepare_metadata&) {
     throw exceptions::invalid_request_exception("LIKE cannot be used with the token function");
 }
 
@@ -133,9 +133,9 @@ sstring cql3::token_relation::to_string() const {
 ::shared_ptr<cql3::term> cql3::token_relation::to_term(
         const std::vector<lw_shared_ptr<column_specification>>& receivers,
         const term::raw& raw, database& db, const sstring& keyspace,
-        variable_specifications& bound_names) const {
+        raw_prepare_metadata& meta) const {
     auto term = raw.prepare(db, keyspace, receivers.front());
-    term->collect_marker_specification(bound_names);
+    term->collect_prepare_metadata(meta);
     return term;
 }
 

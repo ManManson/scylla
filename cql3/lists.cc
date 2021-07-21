@@ -207,7 +207,7 @@ lists::delayed_value::contains_bind_marker() const {
 }
 
 void
-lists::delayed_value::collect_marker_specification(variable_specifications& bound_names) const {
+lists::delayed_value::collect_prepare_metadata(raw_prepare_metadata& meta) const {
 }
 
 shared_ptr<terminal>
@@ -275,9 +275,9 @@ lists::setter_by_index::requires_read() const {
 }
 
 void
-lists::setter_by_index::collect_marker_specification(variable_specifications& bound_names) const {
-    operation::collect_marker_specification(bound_names);
-    _idx->collect_marker_specification(bound_names);
+lists::setter_by_index::collect_prepare_metadata(raw_prepare_metadata& meta) const {
+    operation::collect_prepare_metadata(meta);
+    _idx->collect_prepare_metadata(meta);
 }
 
 void
