@@ -54,6 +54,7 @@ namespace cql3 {
 
 class column_identifier;
 class column_specification;
+namespace functions { class function_call; }
 
 /**
  * A metadata class currently holding bind variables specifications and 
@@ -64,6 +65,11 @@ private:
     std::vector<shared_ptr<column_identifier>> _variable_names;
     std::vector<lw_shared_ptr<column_specification>> _specs;
     std::vector<lw_shared_ptr<column_specification>> _target_columns;
+    // A list of pointers to prepared `function_call` AST nodes.
+    // Used to set additional state for these calls at "prepare" step of a
+    // statement life cycle.
+    using function_calls_t = std::vector<::shared_ptr<cql3::functions::function_call>>;
+    function_calls_t _fn_calls;
 
 public:
 
@@ -83,6 +89,8 @@ public:
     void add_variable_specification(int32_t bind_index, lw_shared_ptr<column_specification> spec);
 
     void set_bound_variables(const std::vector<shared_ptr<column_identifier>>& prepare_meta);
+
+    function_calls_t& function_calls();
 };
 
 }

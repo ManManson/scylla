@@ -364,7 +364,10 @@ select_statement::do_execute(service::storage_proxy& proxy,
         if (this_shard_id() != shard) {
             proxy.get_stats().replica_cross_shard_ops++;
             return make_ready_future<shared_ptr<cql_transport::messages::result_message>>(
-                    make_shared<cql_transport::messages::result_message::bounce_to_shard>(shard));
+                    ::make_shared<cql_transport::messages::result_message::bounce_to_shard>(shard,
+                        // const_cast is a hack! this should really be done via `query_state` but
+                        // would involve a massive refactoring.
+                        std::move(const_cast<cql3::query_options&>(options).take_cached_function_calls())));
         }
     }
 

@@ -334,7 +334,10 @@ modification_statement::execute_with_condition(service::storage_proxy& proxy, se
     if (shard != this_shard_id()) {
         proxy.get_stats().replica_cross_shard_ops++;
         return make_ready_future<shared_ptr<cql_transport::messages::result_message>>(
-                make_shared<cql_transport::messages::result_message::bounce_to_shard>(shard));
+                ::make_shared<cql_transport::messages::result_message::bounce_to_shard>(shard,
+                    // const_cast is a hack! this should really be done via `query_state` but
+                    // would involve a massive refactoring.
+                    std::move(const_cast<cql3::query_options&>(options).take_cached_function_calls())));
     }
 
     return proxy.cas(s, request, request->read_command(proxy), request->key(),
@@ -474,7 +477,26 @@ modification_statement::prepare(database& db, raw_prepare_metadata& meta, cql_st
     auto prepared_attributes = _attrs->prepare(db, keyspace(), column_family());
     prepared_attributes->collect_prepare_metadata(meta);
 
-    return prepare_internal(db, schema, meta, std::move(prepared_attributes), stats);
+    auto prepared_stmt = prepare_internal(db, schema, meta, std::move(prepared_attributes), stats);
+    // For LWT statements, set an additional flag for each non-deterministic
+    // function call within a statement, making it aware that it's being
+    // executed in LWT context.
+    //
+    // This is important since these calls can possibly affect partition key
+    // ranges computation. For such cases we need to forward the computed
+    // execution result of the function when redirecting the query execution to
+    // another shard. Otherwise, it's possible that we end up bouncing
+    // indefinitely between various shards when evaluating a non-deterministic
+    // function each time on each shard.
+    //
+    // Set the flags after the main prepare procedure has already finished,
+    // by that time we've already collected the necessary metadata.
+    if (prepared_stmt->has_conditions()) {
+        for (auto& fn : meta.function_calls()) {
+            fn->set_lwt_context();
+        }
+    }
+    return prepared_stmt;
 }
 
 void

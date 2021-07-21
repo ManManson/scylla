@@ -36,6 +36,7 @@
 #include "types/user.hh"
 #include "concrete_types.hh"
 #include "as_json_function.hh"
+#include "cql3/raw_prepare_metadata.hh"
 
 #include "error_injection_fcts.hh"
 
@@ -431,6 +432,19 @@ functions::type_equals(const std::vector<data_type>& t1, const std::vector<data_
 
 void
 function_call::collect_prepare_metadata(raw_prepare_metadata& meta) const {
+    constexpr auto fn_limit = std::numeric_limits<uint8_t>::max();
+    auto& fn_calls = meta.function_calls();
+    if (fn_calls.size() == fn_limit) {
+        throw exceptions::invalid_request_exception(
+            format("Too many function calls within one statement. Max supported number is {}", fn_limit));
+    }
+    // FIXME: Hacking around `const` specifier in the `collect_prepare_metadata`
+    // declaration since we also need to modify the current instance along
+    // with prepare metadata.
+    auto non_const_self = static_pointer_cast<function_call>(
+        const_cast<function_call*>(this)->shared_from_this());
+    non_const_self->set_id(fn_calls.size());
+    fn_calls.emplace_back(std::move(non_const_self));
     for (auto&& t : _terms) {
         t->collect_prepare_metadata(meta);
     }
@@ -454,7 +468,26 @@ function_call::bind_and_get(const query_options& options) {
         }
         buffers.push_back(to_bytes_opt(val));
     }
+    if (_in_lwt_context && !_fun->is_pure()) {
+        // Populate the cache only for LWT statements. Note that this code
+        // works only in places where `function_call::raw` AST nodes are
+        // created.
+        // These cases do not include selection clause in SELECT statement,
+        // hence no database inputs are possibly allowed to the functions
+        // evaluated here.
+        // We can cache every non-deterministic call here as this code branch
+        // acts the same way as if all arguments are equivalent to literal
+        // values at this point (already calculated).
+        auto query_cached_fn_calls = options.cached_function_calls();
+        auto cached_value_it = query_cached_fn_calls.find(_id);
+        if (query_cached_fn_calls.end() != cached_value_it) {
+            return raw_value_view::make_temporary(raw_value::make_value(cached_value_it->second));
+        }
+    }
     auto result = execute_internal(options.get_cql_serialization_format(), *_fun, std::move(buffers));
+    if (_in_lwt_context && !_fun->is_pure()) {
+        options.cache_function_call(_id, result);
+    }
     return cql3::raw_value_view::make_temporary(cql3::raw_value::make_value(result));
 }
 

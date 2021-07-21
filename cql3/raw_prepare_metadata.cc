@@ -105,4 +105,8 @@ void raw_prepare_metadata::set_bound_variables(const std::vector<shared_ptr<colu
     _target_columns.resize(bn_size);
 }
 
+raw_prepare_metadata::function_calls_t& raw_prepare_metadata::function_calls() {
+    return _fn_calls;
+}
+
 }
