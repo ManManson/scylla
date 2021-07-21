@@ -985,11 +985,17 @@ std::unordered_map<sstring, db::experimental_features_t::feature> db::experiment
     // to UNUSED switch for a while, then remove altogether.
     // Change Data Capture is no longer experimental. Map it
     // to UNUSED_CDC switch for a while, then remove altogether.
-    return {{"lwt", UNUSED}, {"udf", UDF}, {"cdc", UNUSED_CDC}, {"alternator-streams", ALTERNATOR_STREAMS}};
+    return {
+        {"lwt", UNUSED},
+        {"udf", UDF},
+        {"cdc", UNUSED_CDC},
+        {"alternator-streams", ALTERNATOR_STREAMS},
+        {"raft-schema-changes", RAFT_SCHEMA_CHANGES}
+    };
 }
 
 std::vector<enum_option<db::experimental_features_t>> db::experimental_features_t::all() {
-    return {UDF, ALTERNATOR_STREAMS};
+    return {UDF, ALTERNATOR_STREAMS, RAFT_SCHEMA_CHANGES};
 }
 
 std::unordered_map<sstring, db::tri_mode_restriction_t::mode> db::tri_mode_restriction_t::map() {
